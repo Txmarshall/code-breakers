@@ -21,7 +21,7 @@ function run(name, mutate, expectExit, expectText) {
   if (!ok) { fails++; console.log(r.stdout.split('\n').filter(l => l.startsWith('ERROR')).join('\n')); }
 }
 run('clean app passes', id, 0, '0 error(s)');
-run('keyword does not start with its sound', s => s.replace("s:{k:'sun',e:'☀️',say:'sss'}", "s:{k:'apple',e:'☀️',say:'sss'}"), 1, 'G.s: keyword "apple" does not start with /s/');
+run('keyword does not start with its sound', s => s.replace("s:{k:'sun',e:'☀️'}", "s:{k:'apple',e:'☀️'}"), 1, 'G.s: keyword "apple" does not start with /s/');
 run('final grapheme keyword must end with it', s => s.replace("ck:{k:'duck',e:'🦆'}", "ck:{k:'kite',e:'🦆'}"), 1, 'G.ck: keyword "kite" does not end with /ck/');
 run('two graphemes share a picture', s => s.replace("p:{k:'pig',e:'🐷'}", "p:{k:'pig',e:'☀️'}"), 1, 'share the same picture');
 run('two graphemes share a keyword', s => s.replace("t:{k:'tiger',e:'🐯'}", "t:{k:'sun',e:'🐯'}"), 1, 'share the same keyword "sun"');
