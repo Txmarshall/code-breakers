@@ -1,0 +1,775 @@
+<title>Code Breakers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one-screen app, a single column card stack, big touch targets, cream paper ground. */
+:root{
+  --bg:#FBF5E6; --paper:#FFFDF7; --fg:#2A2823; --muted:#6E685B; --line:#E4DBC6;
+  --accent:#2F7D6B; --accent-ink:#FFFFFF; --soft:#DDEFE7; --warm:#F2B544; --gem:#C45C8B;
+  --tile:#FFFFFF; --tile-ink:#1F1D19; --box:#F4EBD3; --shadow:0 2px 0 #D9CFB5;
+  --f-body:Verdana,"DejaVu Sans",Arial,sans-serif;
+  --f-letter:Verdana,"DejaVu Sans",Arial,sans-serif;
+  --ls:0.08em; --tilepx:64px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#1F1E1A; --paper:#2A2823; --fg:#F2EBDC; --muted:#B7AE9B; --line:#3C3932;
+  --accent:#5FB89F; --accent-ink:#10201B; --soft:#24372F; --warm:#E3B04B; --gem:#D97BA8;
+  --tile:#35332C; --tile-ink:#F7F1E3; --box:#3A3730; --shadow:0 2px 0 #14130F; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#1F1E1A; --paper:#2A2823; --fg:#F2EBDC; --muted:#B7AE9B; --line:#3C3932;
+  --accent:#5FB89F; --accent-ink:#10201B; --soft:#24372F; --warm:#E3B04B; --gem:#D97BA8;
+  --tile:#35332C; --tile-ink:#F7F1E3; --box:#3A3730; --shadow:0 2px 0 #14130F; color-scheme:dark }
+:root[data-skin="ocean"]{ --accent:#2B6FA8; --soft:#DCEBF7; --warm:#F0B64B; --gem:#2FA3A0 }
+:root[data-skin="space"]{ --accent:#5B4FB3; --soft:#E6E2F6; --warm:#F5C451; --gem:#E06C9F }
+:root[data-skin="detective"]{ --accent:#8A4B2E; --soft:#F0E3D6; --warm:#D9A441; --gem:#4F6D8A }
+:root[data-skin="kittens"]{ --accent:#C9437A; --soft:#FBE3EC; --warm:#F6C04B; --gem:#7A5BBF }
+:root[data-skin="unicorn"]{ --accent:#7B55C9; --soft:#EEE6FA; --warm:#F9D45C; --gem:#E95C9B }
+:root[data-skin="campers"]{ --accent:#4F7B3A; --soft:#E6EFD9; --warm:#E8B84A; --gem:#C9742B }
+:root[data-skin][data-theme="dark"]{ --soft:#2B3137 }
+@media (prefers-color-scheme:dark){ :root[data-skin]:not([data-theme="light"]){ --soft:#2B3137 }}
+:root[data-paper="white"]{ --bg:#FFFFFF; --paper:#FFFFFF; --box:#F1F1F1 }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:18px;line-height:1.5;
+  -webkit-text-size-adjust:100%;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+#app{min-height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+header.bar{display:flex;align-items:center;gap:10px;min-height:56px}
+header.bar .title{font-weight:700;font-size:1.05rem;letter-spacing:.02em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:.9rem;font-weight:700}
+main{flex:1;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:1.9rem} h2{font-size:1.35rem} h3{font-size:1.1rem}
+p{margin:0}
+.muted{color:var(--muted)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:18px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grow{flex:1;min-width:0}
+.center{text-align:center}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.btn{min-height:60px;padding:12px 22px;border-radius:16px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1.15rem;box-shadow:var(--shadow);display:inline-flex;align-items:center;justify-content:center;gap:10px}
+.btn.secondary{background:var(--soft);color:var(--fg)}
+.btn.ghost{background:transparent;box-shadow:none;border:2px solid var(--line);color:var(--fg)}
+.btn.small{min-height:48px;font-size:1rem;padding:8px 16px;border-radius:12px}
+.btn.big{min-height:76px;font-size:1.35rem;width:100%}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,.tile:focus-visible,.pick:focus-visible{outline:4px solid var(--warm);outline-offset:2px}
+.icon{font-size:1.4em;line-height:1}
+
+/* letters */
+.letters{font-family:var(--f-letter);letter-spacing:var(--ls);font-weight:700}
+.tile{display:inline-flex;align-items:center;justify-content:center;min-width:var(--tilepx);height:var(--tilepx);padding:0 14px;border-radius:14px;
+  background:var(--tile);color:var(--tile-ink);border:3px solid var(--line);box-shadow:var(--shadow);font-size:calc(var(--tilepx) * .55);
+  font-family:var(--f-letter);letter-spacing:var(--ls);font-weight:700;transition:transform .12s}
+.tile.vowel{border-color:var(--gem)}
+.tile.silent{opacity:.6;border-style:dashed}
+.tile.ghost{background:var(--box);color:var(--muted);border-style:dashed;box-shadow:none}
+.tile.sel{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 4px 0 var(--accent)}
+.tile.used{opacity:.3;pointer-events:none}
+.tile.good{border-color:var(--accent);background:var(--soft)}
+.tile.wobble{animation:wob .5s ease}
+@keyframes wob{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.tiles{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center}
+.boxes{display:flex;gap:8px;justify-content:center;align-items:flex-end;flex-wrap:wrap}
+.box{width:calc(var(--tilepx) + 10px);height:calc(var(--tilepx) + 10px);border-radius:14px;border:3px dashed var(--line);background:var(--box);display:flex;align-items:center;justify-content:center}
+.box.filled{border-style:solid}
+.box .tile{min-width:var(--tilepx);padding:0 6px}
+.box.outside{border:0;background:transparent;width:auto}
+.wordbig{font-family:var(--f-letter);letter-spacing:var(--ls);font-weight:700;font-size:2.6rem;text-align:center}
+.emoji-big{font-size:4.2rem;line-height:1;text-align:center}
+.pick{min-height:84px;border-radius:18px;border:3px solid var(--line);background:var(--tile);color:var(--tile-ink);box-shadow:var(--shadow);font-size:1.6rem;display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 14px;font-family:var(--f-letter);letter-spacing:var(--ls);font-weight:700}
+.pick.emoji{font-size:3rem}
+.pick.good{border-color:var(--accent);background:var(--soft)}
+.pick.dim{opacity:.35;pointer-events:none}
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.hear{min-height:76px;min-width:76px;border-radius:50%;border:0;background:var(--warm);color:#2A2823;font-size:2rem;box-shadow:var(--shadow);display:inline-flex;align-items:center;justify-content:center}
+.hear.small{min-height:56px;min-width:56px;font-size:1.4rem}
+.prompt{font-size:1.25rem;font-weight:700;text-align:center}
+.feedback{min-height:2em;text-align:center;font-weight:700;color:var(--accent)}
+.progress{display:flex;gap:6px;justify-content:center}
+.progress i{width:14px;height:14px;border-radius:50%;background:var(--line);display:block}
+.progress i.on{background:var(--accent)}
+.progress i.now{background:var(--warm)}
+.heart{position:relative;display:inline-block}
+.heart::after{content:"♥";position:absolute;left:50%;top:-1em;transform:translateX(-50%);color:var(--gem);font-size:.9rem}
+
+/* trail */
+.trail{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+.stop{border-radius:16px;border:2px solid var(--line);background:var(--paper);padding:10px 6px;text-align:center;min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.stop .n{font-size:.75rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.stop .g{font-family:var(--f-letter);font-weight:700;font-size:1.05rem;letter-spacing:.05em;word-break:break-word}
+.stop.done{background:var(--soft);border-color:var(--accent)}
+.stop.now{border-color:var(--warm);box-shadow:0 0 0 3px var(--warm) inset}
+.stop.locked{opacity:.45}
+.collection{display:flex;flex-wrap:wrap;gap:8px;font-size:1.8rem;line-height:1}
+
+/* breaks */
+.breakwrap{position:relative;width:100%;aspect-ratio:1/1;max-height:60vh;max-width:100%;border-radius:20px;overflow:hidden;background:var(--soft);touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.bubble{position:absolute;left:50%;top:50%;width:40%;aspect-ratio:1/1;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff8 0,var(--accent) 70%);transform:translate(-50%,-50%) scale(.6);transition:transform 4s ease-in-out}
+.bubble.in{transform:translate(-50%,-50%) scale(1.25)}
+.bubble.hold{transition-duration:0s}
+.breathlabel{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-weight:700;font-size:1.4rem}
+
+/* grown-ups */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+.cell{border-radius:10px;padding:8px 4px;text-align:center;font-family:var(--f-letter);font-weight:700;border:2px solid var(--line);font-size:1.05rem}
+.cell.new{opacity:.5}.cell.learn{background:var(--box);border-color:var(--warm)}.cell.secure{background:var(--soft);border-color:var(--accent)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.9rem}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:middle;margin-right:4px;border:2px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+label.field{display:flex;flex-direction:column;gap:6px;font-weight:700}
+input[type=text],select,textarea{font:inherit;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--paper);color:var(--fg);min-height:52px;width:100%}
+textarea{min-height:110px;font-family:monospace;font-size:.85rem}
+input[type=range]{width:100%;min-height:44px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px}
+.sw{width:64px;height:36px;border-radius:999px;background:var(--line);border:0;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:28px;height:28px;border-radius:50%;background:var(--paper);transition:left .15s}
+.sw.on{background:var(--accent)}.sw.on::after{left:32px}
+details{border:1px solid var(--line);border-radius:14px;padding:10px 14px;background:var(--paper)}
+summary{font-weight:700;cursor:pointer;min-height:44px;display:flex;align-items:center}
+.cite{font-size:.9rem;color:var(--muted)}
+.cite a{color:var(--accent)}
+.ev{display:inline-block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:6px;background:var(--soft);margin-right:6px;font-weight:700}
+ul{margin:0;padding-left:1.2em}
+li{margin:4px 0}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:50}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:700;z-index:60;opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+@media (max-width:420px){ :root{--tilepx:56px} .wordbig{font-size:2.1rem} .picks{grid-template-columns:1fr 1fr} }
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+
+<div id="app" role="application" aria-label="Code Breakers"></div>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Code Breakers — a structured-literacy decoding + encoding game.
+   Single file, no dependencies, local-first. Data: localStorage.
+   Scope & sequence: Letters and Sounds Phase 2/3 order, then digraphs,
+   blends, VCe, vowel teams, r-controlled, syllable types, morphology.
+   Instructional routines follow IES/WWC practice guide NCEE 2016-4008
+   (Recs 2 & 3: phonemic awareness linked to letters, blending, Elkonin
+   boxes, word building, high-frequency words). See the Grown-ups page.
+   ===================================================================== */
+
+/* ---------- 1. DATA ---------- */
+// grapheme -> {k: keyword, e: emoji, say: TTS approximation for continuous sounds (null = stop sound), v: vowel}
+const G = {
+  s:{k:'sun',e:'☀️',say:'sss'}, a:{k:'apple',e:'🍎',say:'a',v:1}, t:{k:'tiger',e:'🐯'}, p:{k:'pig',e:'🐷'},
+  i:{k:'iguana',e:'🦎',say:'i',v:1}, n:{k:'nut',e:'🥜',say:'nnn'}, m:{k:'moon',e:'🌙',say:'mmm'}, d:{k:'dog',e:'🐶'},
+  g:{k:'goat',e:'🐐'}, o:{k:'octopus',e:'🐙',say:'o',v:1}, c:{k:'cat',e:'🐱'}, k:{k:'key',e:'🔑'},
+  ck:{k:'duck',e:'🦆'}, e:{k:'egg',e:'🥚',say:'e',v:1}, u:{k:'umbrella',e:'☂️',say:'u',v:1}, r:{k:'rabbit',e:'🐰',say:'rrr'},
+  h:{k:'hat',e:'🎩'}, b:{k:'bus',e:'🚌'}, f:{k:'fish',e:'🐟',say:'fff'}, l:{k:'lemon',e:'🍋',say:'lll'},
+  ff:{k:'puff',e:'💨',say:'fff'}, ll:{k:'bell',e:'🔔',say:'lll'}, ss:{k:'dress',e:'👗',say:'sss'}, j:{k:'jet',e:'✈️'}, v:{k:'van',e:'🚐',say:'vvv'}, w:{k:'web',e:'🕸️',say:'w'},
+  x:{k:'box',e:'📦'}, y:{k:'yarn',e:'🧶',say:'y'}, z:{k:'zebra',e:'🦓',say:'zzz'}, zz:{k:'buzz',e:'🐝',say:'zzz'}, qu:{k:'queen',e:'👸'},
+  sh:{k:'sheep',e:'🐑',say:'shh'}, ch:{k:'chick',e:'🐥'}, th:{k:'thumb',e:'👍',say:'th'}, ng:{k:'ring',e:'💍',say:'ng'},
+  a_e:{k:'cake',e:'🎂',say:'ay',v:1}, i_e:{k:'bike',e:'🚲',say:'eye',v:1}, o_e:{k:'bone',e:'🦴',say:'oh',v:1}, u_e:{k:'cube',e:'🧊',say:'you',v:1},
+  ai:{k:'rain',e:'🌧️',say:'ay',v:1}, ay:{k:'hay',e:'🌾',say:'ay',v:1}, ee:{k:'bee',e:'🐝',say:'ee',v:1}, ea:{k:'leaf',e:'🍃',say:'ee',v:1},
+  oa:{k:'boat',e:'⛵',say:'oh',v:1}, ow:{k:'snow',e:'❄️',say:'oh',v:1}, igh:{k:'night',e:'🌃',say:'eye',v:1},
+  ar:{k:'car',e:'🚗',say:'ar',v:1}, or:{k:'fork',e:'🍴',say:'or',v:1}, er:{k:'fern',e:'🌿',say:'er',v:1}, ir:{k:'bird',e:'🐦',say:'er',v:1}, ur:{k:'turtle',e:'🐢',say:'er',v:1},
+  oo:{k:'moon',e:'🌙',say:'oo',v:1}, ou:{k:'cloud',e:'☁️',say:'ow',v:1}, oi:{k:'oil',e:'🛢️',say:'oy',v:1}, oy:{k:'toy',e:'🧸',say:'oy',v:1},
+  blend:{k:'blends',e:'🧩'}, syll:{k:'syllables',e:'✂️'}, morph:{k:'word parts',e:'🧱'}
+};
+const MULTI = ['igh','a_e','i_e','o_e','u_e','ck','sh','ch','th','ng','ai','ay','ee','ea','oa','ow','ar','or','er','ir','ur','oo','ou','oi','oy','ff','ll','ss','zz','qu'];
+const VOWELS = 'aeiou';
+const CONFUSE = {b:['d','p'],d:['b','p'],p:['q','b'],q:['p'],m:['n','w'],n:['m','u'],u:['n'],w:['m'],a:['e','u'],e:['i','a'],i:['e'],o:['a','u'],s:['z'],f:['v'],v:['f'],c:['k'],k:['c'],g:['j'],j:['g'],t:['d'],h:['n'],l:['i'],sh:['ch'],ch:['sh'],th:['f'],ai:['ay'],ay:['ai'],ee:['ea'],ea:['ee'],oa:['ow'],ow:['oa'],er:['ir','ur'],ir:['er','ur'],ur:['er','ir'],oi:['oy'],oy:['oi']};
+
+// word -> emoji where a clear picture exists (used for Read It)
+const PIC = {sun:'☀️',cat:'🐱',dog:'🐶',pig:'🐷',map:'🗺️',pin:'📌',hat:'🎩',bus:'🚌',bug:'🐛',bed:'🛏️',bat:'🏏',bag:'👜',cup:'☕',hen:'🐔',fox:'🦊',box:'📦',six:'6️⃣',ten:'🔟',web:'🕸️',van:'🚐',jet:'✈️',
+  cap:'🧢',pot:'🍲',mop:'🧹',sock:'🧦',duck:'🦆',rock:'🪨',nut:'🥜',egg:'🥚',leg:'🦵',log:'🪵',lip:'👄',fish:'🐟',ship:'🚢',shell:'🐚',chick:'🐥',ring:'💍',king:'🤴',moth:'🦋',frog:'🐸',crab:'🦀',drum:'🥁',flag:'🚩',
+  tent:'⛺',hand:'✋',milk:'🥛',lamp:'🪔',gift:'🎁',cake:'🎂',bike:'🚲',kite:'🪁',bone:'🦴',rope:'🪢',nose:'👃',rain:'🌧️',tree:'🌳',bee:'🐝',leaf:'🍃',boat:'⛵',goat:'🐐',snow:'❄️',car:'🚗',star:'⭐',fork:'🍴',corn:'🌽',bird:'🐦',
+  moon:'🌙',book:'📖',foot:'🦶',cow:'🐄',owl:'🦉',coin:'🪙',toy:'🧸',rabbit:'🐰',robot:'🤖',spider:'🕷️',apple:'🍎',turtle:'🐢',lemon:'🍋',planet:'🪐',cactus:'🌵',magnet:'🧲',puppet:'🎭',button:'🔘',muffin:'🧁',tiger:'🐯',
+  mug:'☕',pen:'🖊️',net:'🥅',gum:'🍬',jam:'🍯',key:'🔑',kid:'🧒',man:'👨',dad:'👨',sad:'😢',mad:'😠',hug:'🤗',run:'🏃',zip:'🤐',mix:'🥣',wig:'💇',pan:'🍳',tap:'🚰',top:'🔝',tin:'🥫',dip:'🫕',tub:'🛁',rug:'🧶',fan:'🪭',lock:'🔒',
+  stop:'🛑',swim:'🏊',jump:'🤸',nest:'🪺',desk:'🖥️',pond:'🏞️',camp:'🏕️',game:'🎮',gate:'🚪',five:'5️⃣',nine:'9️⃣',home:'🏠',cube:'🧊',mule:'🫏',tail:'🐒',snail:'🐌',nail:'💅',mail:'📬',feet:'🦶',seed:'🌱',green:'🟢',
+  sleep:'😴',sea:'🌊',beach:'🏖️',meat:'🥩',road:'🛣️',soap:'🧼',toast:'🍞',light:'💡',night:'🌃',farm:'🚜',park:'🌳',card:'🃏',barn:'🏚️',shark:'🦈',jar:'🫙',horn:'📯',storm:'⛈️',girl:'👧',shirt:'👕',nurse:'👩‍⚕️',surf:'🏄',
+  food:'🍽️',boot:'👢',zoo:'🦁',wood:'🪵',cloud:'☁️',town:'🏘️',oil:'🛢️',boy:'👦',kitten:'🐱',basket:'🧺',sunset:'🌇',insect:'🐞',napkin:'🧻',picnic:'🧺',paper:'📄',baby:'👶',music:'🎵',table:'🪑',candle:'🕯️',bubble:'🫧',purple:'🟣',river:'🏞️',
+  seven:'7️⃣',comet:'☄️',cabin:'🛖',unlock:'🔓',replay:'🔁',dislike:'👎',teacher:'🧑‍🏫',helpful:'🤝',boxes:'📦',dishes:'🍽️',jumping:'🤸',singing:'🎤',reading:'📖'};
+
+// LEVELS: g = graphemes taught; words = decodable words buildable from graphemes taught so far; heart = tricky words introduced
+const LEVELS = [
+ {id:1,name:'First Sounds',g:['s','a','t','p'],words:['at','sat','pat','tap','sap','taps','pats'],heart:[]},
+ {id:2,name:'More Sounds',g:['i','n','m','d'],words:['in','it','an','am','sit','sip','pin','pan','man','mat','map','nap','nip','tin','tip','tan','dip','dad','mad','sad','did','pad','pit','dim','sand','and'],heart:['the','a','I']},
+ {id:3,name:'Hard Sounds',g:['g','o','c','k'],words:['dog','got','cot','cat','can','cap','cod','cog','cop','kit','kid','pig','dig','gap','gas','dot','pot','top','mop','pop','pod','nod','not','on'],heart:['to','no','go']},
+ {id:4,name:'Click & Run',g:['ck','e','u','r'],words:['kick','pick','sick','tick','sock','dock','rock','duck','tuck','pack','sack','tack','neck','peck','deck','red','run','rat','rug','rip','rim','rod','rot','cup','cut','mud','mum','sun','nut','gum','gun','pup','tug','dug','pen','ten','net','get','men','met','pet','peg','up','us','end','and'],heart:['into','is','his']},
+ {id:5,name:'Happy Bugs',g:['h','b','f','l'],words:['hat','hen','hug','hot','hop','hip','hid','hit','him','hum','hut','had','ham','big','bat','bed','bus','bug','bag','bit','but','bad','bin','bun','bud','cab','cub','rub','tub','sob','rob','rib','fan','fit','fun','fog','fin','fat','fed','fig','leg','let','lip','lap','log','lid','lot','lit','lock','luck','lick','back','lab','lad','help','belt','hand','lamp','fast'],heart:['he','she','we','me','be']},
+ {id:6,name:'Double Trouble',g:['ff','ll','ss','j','v','w'],words:['huff','puff','off','cuff','bell','tell','fill','hill','doll','dull','sell','well','kiss','miss','moss','mess','less','pass','boss','fuss','hiss','jet','jam','jug','job','jog','jab','jig','van','vet','web','wig','win','wet','wag','wit','will','swim','jump','wind','melt','soft'],heart:['was','you','they']},
+ {id:7,name:'Zippy Zone',g:['x','y','z','zz','qu'],words:['fox','box','six','mix','fix','wax','tax','ox','yes','yet','yap','yum','yell','zip','zap','buzz','fizz','jazz','fuzz','quit','quiz','quick','quack','next','best','must','dust','rust','lost'],heart:['all','are','my','her']},
+ {id:8,name:'Sound Teams',g:['sh','ch','th','ng'],words:['ship','shop','shed','shut','fish','dish','wish','rush','cash','shell','shock','chip','chop','chin','chat','much','such','rich','chick','check','chuck','this','that','then','them','thin','thick','with','moth','path','bath','ring','king','song','long','sing','hang','rung','sang','wing','bang','thing','sung','shelf','chest','thank','sting'],heart:['said','have','like','so']},
+ {id:9,name:'Blend Power',g:['blend'],words:['stop','step','snap','spin','flag','plan','crab','drum','grin','trip','frog','clap','swim','slip','spot','twig','tent','hand','milk','jump','lamp','desk','nest','belt','gift','pond','camp','help','sand','end','ant','wind','lost','best','must','soft','melt','dust','rust','land','bend','bump','hunt','stamp','crisp','print','blend','trust','slept','spend','stand','strap','split'],heart:['do','some','come','were']},
+ {id:10,name:'Magic e',g:['a_e','i_e','o_e','u_e'],words:['cake','make','name','game','lake','gate','tape','bake','take','made','time','bike','five','kite','line','ride','hide','mine','nine','life','home','bone','note','rope','hope','joke','poke','nose','those','cube','tune','huge','mule','cute','rude','flute','plane','slide','stone','smile','grape'],heart:['there','little','one','when']},
+ {id:11,name:'Vowel Teams',g:['ai','ay','ee','ea','oa','ow','igh'],words:['rain','tail','wait','paint','snail','nail','pail','mail','sail','day','play','stay','tray','say','may','way','hay','tree','feet','seed','green','sleep','bee','see','keep','feel','eat','sea','read','team','beach','leaf','meat','seat','boat','coat','road','soap','goat','toast','snow','grow','show','blow','slow','low','high','light','night','right','fight','sight','tight','might','bright'],heart:['out','what','their','people']},
+ {id:12,name:'Bossy r',g:['ar','or','er','ir','ur'],words:['car','star','farm','park','dark','start','card','barn','shark','yard','jar','far','for','corn','fork','horn','born','storm','sort','short','port','torch','her','fern','term','herb','bird','girl','first','shirt','dirt','stir','turn','fur','burn','hurt','nurse','curl','surf','third','north','sharp'],heart:['could','would','should','water']},
+ {id:13,name:'Moon & Cloud',g:['oo','ou','oi','oy'],words:['moon','food','boot','room','zoo','cool','soon','spoon','roof','tooth','book','look','took','good','foot','wood','hook','out','loud','cloud','shout','found','round','sound','mouth','oil','coin','boil','join','point','soil','toy','boy','joy','enjoy'],heart:['because','again','many','very']},
+ {id:14,name:'Syllable Split',g:['syll'],older:true,words:[],heart:['through','thought','laugh','eyes'],
+  items:[['rab','bit','VC/CV'],['nap','kin','VC/CV'],['sun','set','VC/CV'],['bas','ket','VC/CV'],['pic','nic','VC/CV'],['cac','tus','VC/CV'],['hap','pen','VC/CV'],['in','sect','VC/CV'],['kit','ten','VC/CV'],['mag','net','VC/CV'],['pup','pet','VC/CV'],['ten','nis','VC/CV'],['muf','fin','VC/CV'],['but','ton','VC/CV'],['vel','vet','VC/CV'],
+         ['ti','ger','V/CV'],['ro','bot','V/CV'],['mu','sic','V/CV'],['pa','per','V/CV'],['mo','ment','V/CV'],['ba','by','V/CV'],['o','pen','V/CV'],['si','lent','V/CV'],['be','gin','V/CV'],['hu','man','V/CV'],['bo','nus','V/CV'],['spi','der','V/CV'],['fro','zen','V/CV'],
+         ['cab','in','VC/V'],['lim','it','VC/V'],['vis','it','VC/V'],['pan','el','VC/V'],['riv','er','VC/V'],['lev','el','VC/V'],['mod','el','VC/V'],['plan','et','VC/V'],['sev','en','VC/V'],['lem','on','VC/V'],['rob','in','VC/V'],['com','et','VC/V'],
+         ['ta','ble','C-le'],['lit','tle','C-le'],['ap','ple','C-le'],['pud','dle','C-le'],['can','dle','C-le'],['bub','ble','C-le'],['tur','tle','C-le'],['pur','ple','C-le'],['rid','dle','C-le'],['sim','ple','C-le']]},
+ {id:15,name:'Word Parts',g:['morph'],older:true,words:[],heart:['enough','friend','does','once'],
+  items:[['un','lock',null,'not'],['un','fair',null,'not'],['un','tie',null,'not'],['un','happy',null,'not'],['re','do',null,'again'],['re','play',null,'again'],['re','fill',null,'again'],['re','build',null,'again'],['pre','heat',null,'before'],['pre','pay',null,'before'],['pre','view',null,'before'],['dis','like',null,'opposite'],['dis','trust',null,'opposite'],['dis','agree',null,'opposite'],['mis','spell',null,'wrongly'],['mis','match',null,'wrongly'],
+         [null,'jump','ing','happening now'],[null,'play','ing','happening now'],[null,'sing','ing','happening now'],[null,'read','ing','happening now'],[null,'jump','ed','in the past'],[null,'play','ed','in the past'],[null,'want','ed','in the past'],[null,'teach','er','a person who'],[null,'fast','er','more'],[null,'fast','est','the most'],[null,'slow','ly','in that way'],[null,'help','ful','full of'],[null,'hope','less','without'],[null,'kind','ness','state of being'],[null,'read','able','can be'],[null,'box','es','more than one'],[null,'dish','es','more than one'],
+         ['un','help','ful','not full of'],['re','start','ed','again, in the past'],['un','kind','ness','not being kind']]}
+];
+const HEART_HINT = {the:'th',a:'a',I:'I',to:'o',no:'o',go:'o',into:'o',is:'s',his:'s',he:'e',she:'e',we:'e',me:'e',be:'e',was:'a',you:'ou',they:'ey',all:'a',are:'are',my:'y',her:'er',said:'ai',have:'ve',like:'i_e',so:'o',do:'o',some:'o',come:'o',were:'ere',there:'ere',little:'le',one:'one',when:'wh',out:'ou',what:'a',their:'eir',people:'eo',could:'oul',would:'oul',should:'oul',water:'a',because:'au',again:'ai',many:'a',very:'y',through:'ough',thought:'ough',laugh:'augh',eyes:'eye',enough:'ough',friend:'ie',does:'oe',once:'o'};
+
+const SKINS = {
+  forest:{name:'Forest',icon:'🌲',coll:['🍄','🦊','🦉','🐿️','🌻','🐞','🦋','🍁','🐢','🌼','🪵','🐸'],noun:'forest friends',round:'Adventure',word:'trail'},
+  ocean:{name:'Ocean',icon:'🐚',coll:['🐚','🐠','🐙','🦀','🐬','⭐','🐳','🦈','🪸','🐡','🦑','🐢'],noun:'sea treasures',round:'Dive',word:'reef'},
+  space:{name:'Space',icon:'🚀',coll:['🪐','⭐','🌙','☄️','🛸','👩‍🚀','🌌','🛰️','🌠','🔭','🌍','🚀'],noun:'star finds',round:'Mission',word:'star map'},
+  detective:{name:'Detective',icon:'🕵️',coll:['🔍','🗝️','🧩','📜','🔦','🧭','💼','🎩','🗺️','🔐','📷','🧪'],noun:'clues',round:'Case',word:'case file'},
+  kittens:{name:'Kittens',icon:'🐱',coll:['🎀','🐾','🧶','🐟','🥛','🌸','🍓','🐈','💗','🧸','🍰','🦋'],noun:'kitten treats',round:'Playtime',word:'cat café'},
+  unicorn:{name:'Unicorns',icon:'🦄',coll:['🌈','⭐','🌸','💎','🧁','🍭','☁️','🌙','✨','🎀','🦄','🌷'],noun:'rainbow gems',round:'Quest',word:'cloud castle'},
+  campers:{name:'Trailblazers',icon:'🏕️',coll:['🏅','🔥','🧭','🥾','🌲','🎒','🔦','🪵','🎖️','🍪','🌄','🛶'],noun:'badges',round:'Hike',word:'badge sash'}
+};
+const BREAKS = [
+  {id:'breathe',name:'Breathing bubble',icon:'🫧'},
+  {id:'garden',name:'Grow a garden',icon:'🌷'},
+  {id:'bubbles',name:'Bubble drift',icon:'🔵'},
+  {id:'stars',name:'Star trail',icon:'✨'}
+];
+
+/* ---------- 2. STORAGE ---------- */
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k);}catch(e){} }
+};
+const DB = { profiles: LS.get('cb_profiles',[]), current: LS.get('cb_current',null), voice: LS.get('cb_voice',{}), settings: LS.get('cb_settings',{ls:0.08,font:'verdana',paper:'cream',theme:'auto',rate:0.85,voice:''}) };
+function saveAll(){ LS.set('cb_profiles',DB.profiles); LS.set('cb_current',DB.current); LS.set('cb_settings',DB.settings); }
+function saveVoice(){ LS.set('cb_voice',DB.voice); }
+function newProfile(name,band,skin){
+  return {id:'p'+Date.now().toString(36),name,band,skin,level:1,g:{},conf:{},coll:[],sessions:[],heart:{},created:Date.now(),placed:band==='young'};
+}
+function P(){ return DB.profiles.find(p=>p.id===DB.current)||null; }
+
+/* ---------- 3. TOKENIZER + MASTERY ---------- */
+function tokenize(word, extraMulti){
+  // returns [{t:'c', g:'c', v:bool, silent:bool}] ; VCe handled first
+  const multi = MULTI.filter(m=>!m.includes('_'));
+  const vce = word.match(/^([a-z]*?)([aiou])([bcdfghjklmnpqrstvz])e$/);
+  if (vce && !/(ai|ay|ee|ea|oa|ow|igh|oo|ou|oi|oy)$/.test(vce[1]+vce[2])) {
+    const pre = tokenize(vce[1], extraMulti);
+    return pre.concat([{t:vce[2],g:vce[2]+'_e',v:true},{t:vce[3],g:vce[3]},{t:'e',g:'e',silent:true}]);
+  }
+  const out=[]; let i=0;
+  while(i<word.length){
+    let hit=null;
+    for(const m of multi){ if(word.startsWith(m,i)){ if(!hit||m.length>hit.length) hit=m; } }
+    if(hit){ out.push({t:hit,g:hit,v:!!(G[hit]&&G[hit].v)}); i+=hit.length; }
+    else { const c=word[i]; out.push({t:c,g:c,v:VOWELS.includes(c)}); i++; }
+  }
+  return out;
+}
+function taughtGraphemes(p){ const s=new Set(); LEVELS.filter(l=>l.id<=p.level).forEach(l=>l.g.forEach(g=>{ if(G[g]&&!['blend','syll','morph'].includes(g)) s.add(g); })); return [...s]; }
+function record(p, g, task, ok, chosen){
+  if(!p.g[g]) p.g[g]={a:[],enc:0,dec:0};
+  const r=p.g[g]; r.a.push(ok?1:0); if(r.a.length>12) r.a.shift(); if(task==='encode') r.enc++; else r.dec++;
+  if(!ok && chosen && chosen!==g){ const key=g+'>'+chosen; p.conf[key]=(p.conf[key]||0)+1; }
+  saveAll();
+}
+function mastery(p,g){
+  const r=p.g[g]; if(!r||r.a.length<6) return r&&r.a.length?'learn':'new';
+  const last=r.a.slice(-8); const sum=last.reduce((a,b)=>a+b,0);
+  if(last.length>=8 && sum>=7 && r.enc>=3) return 'secure';
+  return 'learn';
+}
+function levelOf(id){ return LEVELS.find(l=>l.id===id); }
+function levelSecure(p,l){ return l.g.every(g=>mastery(p,g)==='secure'); }
+function checkAdvance(p){
+  const l=levelOf(p.level); if(!l) return false;
+  if(levelSecure(p,l) && p.level<LEVELS.length){ p.level++; saveAll(); return true; }
+  return false;
+}
+function weakness(p,g){ const r=p.g[g]; if(!r||!r.a.length) return 0.6; const last=r.a.slice(-8); return 1-(last.reduce((a,b)=>a+b,0)/last.length); }
+function rnd(n){ return Math.floor(Math.random()*n); }
+function pick(arr){ return arr[rnd(arr.length)]; }
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=rnd(i+1); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function wordsFor(p, uptoLevel){ const w=[]; LEVELS.filter(l=>l.id<=uptoLevel).forEach(l=>w.push(...l.words)); return [...new Set(w)]; }
+function levelWords(l){ return l.words; }
+function heartsFor(p){ const h=[]; LEVELS.filter(l=>l.id<=p.level).forEach(l=>h.push(...l.heart)); return h; }
+
+/* ---------- 4. AUDIO ---------- */
+let AC=null;
+function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function tone(freq,dur,type,gain,when){ const c=ac(); if(!c) return; const o=c.createOscillator(), g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq; g.gain.value=0; o.connect(g); g.connect(c.destination); const t=c.currentTime+(when||0); g.gain.linearRampToValueAtTime(gain||.15,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+dur); o.start(t); o.stop(t+dur+.05); }
+const SFX = {
+  good(){ tone(523,.18,'sine',.12); tone(784,.28,'sine',.12,.12); },
+  again(){ tone(330,.25,'triangle',.08); },
+  tap(){ tone(660,.08,'sine',.06); },
+  win(){ [523,659,784,1047].forEach((f,i)=>tone(f,.3,'sine',.1,i*.11)); },
+  pop(){ tone(900,.06,'sine',.05); }
+};
+let VOICES=[]; function loadVoices(){ try{ VOICES=speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang)); }catch(e){ VOICES=[]; } }
+if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+function speak(text, opts){
+  opts=opts||{};
+  return new Promise(res=>{
+    if(!('speechSynthesis' in window)){ res(); return; }
+    try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=opts.rate||DB.settings.rate||.85; u.pitch=opts.pitch||1.05; u.lang='en-US';
+      const v=VOICES.find(v=>v.name===DB.settings.voice)||VOICES.find(v=>/Samantha|Aria|Jenny|Zira|Google US English|Karen|Moira/i.test(v.name))||VOICES.find(v=>/en-US/i.test(v.lang))||VOICES[0];
+      if(v) u.voice=v; u.onend=()=>res(); u.onerror=()=>res(); speechSynthesis.speak(u); setTimeout(res, 4000); }catch(e){ res(); }
+  });
+}
+function playClip(dataUrl){ return new Promise(res=>{ try{ const a=new Audio(dataUrl); a.onended=res; a.onerror=res; a.play().catch(()=>res()); }catch(e){ res(); } }); }
+async function sayWord(w){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(w); }
+async function sayPhoneme(g){
+  // Parent recording first (correct, clipped sounds). Otherwise TTS approximation for continuous sounds, keyword for stops.
+  if(DB.voice['g:'+g]) return playClip(DB.voice['g:'+g]);
+  const d=G[g]||{};
+  if(d.say) await speak(d.say,{rate:.7});
+  else if(d.k) await speak(d.k.split(' ')[0],{rate:.8});
+}
+async function sayKeyword(g){ const d=G[g]; if(!d) return; if(DB.voice['k:'+g]) return playClip(DB.voice['k:'+g]); return speak(d.k); }
+
+/* ---------- 5. UI PLUMBING ---------- */
+const $=s=>document.querySelector(s);
+const app=$('#app');
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+function applySettings(){
+  const s=DB.settings, r=document.documentElement;
+  r.style.setProperty('--ls', (s.ls||0.08)+'em');
+  r.style.setProperty('--f-letter', s.font==='lexend'?'"Lexend",Verdana,Arial,sans-serif': s.font==='arial'?'Arial,Helvetica,sans-serif':'Verdana,"DejaVu Sans",Arial,sans-serif');
+  if(s.paper==='white') r.setAttribute('data-paper','white'); else r.removeAttribute('data-paper');
+  if(s.theme==='dark'||s.theme==='light') r.setAttribute('data-theme',s.theme); else r.removeAttribute('data-theme');
+  const p=P(); if(p&&p.skin&&p.skin!=='forest') r.setAttribute('data-skin',p.skin); else r.removeAttribute('data-skin');
+  if(s.font==='lexend' && !document.getElementById('lexendcss')){ const l=document.createElement('link'); l.id='lexendcss'; l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=Lexend:wght@500;700&display=swap'; document.head.appendChild(l); }
+}
+function tileHTML(tok, cls){ return `<span class="tile ${tok.v?'vowel':''} ${tok.silent?'silent':''} ${cls||''}" data-g="${esc(tok.g)}">${esc(tok.t)}</span>`; }
+function hearBtn(id, small){ return `<button class="hear ${small?'small':''}" data-act="${id}" aria-label="Hear it">🔊</button>`; }
+function bar(title, right){ return `<header class="bar"><button class="btn ghost small" data-act="home" aria-label="Home">🏠</button><div class="title">${title}</div>${right||''}</header>`; }
+let burst=null;
+function confetti(){ if(matchMedia('(prefers-reduced-motion:reduce)').matches) return; const c=document.createElement('canvas'); c.className='confetti'; document.body.appendChild(c); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; const ps=Array.from({length:70},()=>({x:Math.random()*c.width,y:-20-Math.random()*200,r:4+Math.random()*6,s:2+Math.random()*3,h:Math.random()*360,w:Math.random()*2-1}));
+  let t=0; (function f(){ t++; x.clearRect(0,0,c.width,c.height); ps.forEach(p=>{ p.y+=p.s; p.x+=p.w; x.fillStyle=`hsl(${p.h} 80% 60%)`; x.fillRect(p.x,p.y,p.r,p.r*1.4); }); if(t<110) requestAnimationFrame(f); else c.remove(); })(); }
+
+/* ---------- 6. SCREENS ---------- */
+const S = {};
+let view='home', session=null, breakTimer=null, animId=null;
+function go(v,arg){ cleanupBreak(); if(v!=='play') cur=null; view=v; render(arg); window.scrollTo(0,0); }
+function render(arg){ applySettings(); const fn=S[view]||S.home; app.innerHTML=fn(arg)||''; if(fn.after) fn.after(arg); }
+
+/* --- home / profiles --- */
+S.start=function(){
+  const list=DB.profiles.map(p=>`<button class="btn big secondary" data-act="choose" data-id="${p.id}"><span class="icon">${SKINS[p.skin].icon}</span> ${esc(p.name)}</button>`).join('');
+  return `<header class="bar"><div class="title">Code Breakers</div><button class="btn ghost small" data-act="grown">Grown-ups</button></header>
+  <main class="stack">
+    <div class="card stack center"><div class="emoji-big">🔐</div><h1>Who is playing?</h1><p class="muted">Every word is a code. You are the code breaker.</p></div>
+    ${list?`<div class="stack">${list}</div>`:''}
+    <button class="btn ghost" data-act="newprofile">＋ Add a player</button>
+  </main>`;
+};
+S.newprofile=function(){
+  return bar('New player')+`<main class="stack">
+    <div class="card stack">
+      <label class="field">Name <input type="text" id="pname" maxlength="16" placeholder="First name" autocomplete="off"></label>
+      <div><div style="font-weight:700;margin-bottom:6px">Age</div><div class="row">
+        <button class="btn secondary grow" data-act="band" data-v="young">5 – 7</button>
+        <button class="btn secondary grow" data-act="band" data-v="older">8 – 12</button></div>
+        <p class="muted" style="margin-top:6px">Same lessons, different look. Older players get a quick check first so they can skip what they already know.</p></div>
+      <div><div style="font-weight:700;margin-bottom:6px">Pick a world</div><div class="picks">
+        ${Object.entries(SKINS).map(([k,s])=>`<button class="pick" data-act="skin" data-v="${k}">${s.icon}<span style="font-size:1rem">${s.name}</span></button>`).join('')}</div></div>
+      <button class="btn big" data-act="createprofile" id="createbtn" disabled>Let's go</button>
+    </div></main>`;
+};
+S.newprofile.after=function(){ S.newprofile.band=null; S.newprofile.skin=null; };
+
+S.home=function(){
+  const p=P(); if(!p) return S.start();
+  const sk=SKINS[p.skin], l=levelOf(p.level);
+  const secureCount=l.g.filter(g=>mastery(p,g)==='secure').length;
+  const today=new Date().toDateString(); const todayMin=p.sessions.filter(s=>new Date(s.t).toDateString()===today).reduce((a,s)=>a+s.min,0);
+  return `<header class="bar"><button class="btn ghost small" data-act="switch" aria-label="Switch player">${sk.icon}</button><div class="title">${esc(p.name)}'s ${sk.word}</div><button class="btn ghost small" data-act="grown">Grown-ups</button></header>
+  <main class="stack">
+    <div class="card stack center">
+      <div class="chip">Level ${l.id} · ${esc(l.name)}</div>
+      <div class="tiles">${l.g.map(g=>`<span class="tile ${G[g].v?'vowel':''} ${mastery(p,g)==='secure'?'good':''}" style="--tilepx:56px">${G[g].e&&['blend','syll','morph'].includes(g)?G[g].e:esc(g.replace('_e','-e'))}</span>`).join('')}</div>
+      <p class="muted">${secureCount} of ${l.g.length} codes cracked${todayMin?` · ${Math.round(todayMin)} min today`:''}</p>
+      <button class="btn big" data-act="play"><span class="icon">▶</span> Start ${sk.round}</button>
+      ${p.band==='older'&&!p.placed?`<button class="btn secondary" data-act="placement">Quick check — skip what you know</button>`:''}
+    </div>
+    <div class="card stack">
+      <div class="row"><h3 class="grow">My ${sk.noun}</h3><span class="chip">${p.coll.length}</span></div>
+      <div class="collection">${p.coll.length?p.coll.slice(-40).map(c=>`<span>${c}</span>`).join(''):'<span class="muted" style="font-size:1rem">Finish a round to find your first one.</span>'}</div>
+    </div>
+    <div class="card stack">
+      <h3>The ${sk.word}</h3>
+      <div class="trail">${LEVELS.map(L=>{ const st=L.id<p.level?'done':L.id===p.level?'now':'locked'; return `<div class="stop ${st}"><div class="n">${L.id<p.level?'✓':L.id===p.level?'now':'🔒'} ${L.id}</div><div class="g">${L.g.map(g=>['blend','syll','morph'].includes(g)?G[g].e:g.replace('_e','-e')).join(' ')}</div><div class="muted" style="font-size:.75rem">${esc(L.name)}</div></div>`; }).join('')}</div>
+    </div>
+  </main>`;
+};
+
+/* --- session engine --- */
+function buildSession(p){
+  const young=p.band==='young';
+  const L=levelOf(p.level);
+  const taught=taughtGraphemes(p);
+  const n= young?6:9;
+  const rounds=[];
+  if(L.older){
+    rounds.push(makeRound(p,['split','split','split','build2','split','peel','split','build2','peel'].slice(0,n)));
+    rounds.push(makeRound(p,['peel','peel','split','heart','peel','build2','peel','split','peel'].slice(0,n)));
+    rounds.push(makeRound(p,['split','peel','build2','split','peel','heart','split','peel','build2'].slice(0,n)));
+  } else if(L.id<=2){
+    rounds.push(makeRound(p,['spy','spy','first','spy','find','spy','count','spy','find'].slice(0,n)));
+    rounds.push(makeRound(p,['count','build','spy','build','first','build','spy','build','find'].slice(0,n)));
+    rounds.push(makeRound(p,['find','build','spy','read','build','heart','find','build','spy'].slice(0,n)));
+  } else {
+    rounds.push(makeRound(p,['spy','find','first','read','spy','find','count','read','spy'].slice(0,n)));
+    rounds.push(makeRound(p,['count','build','build','switch','build','first','build','switch','build'].slice(0,n)));
+    rounds.push(makeRound(p,['read','build','find','heart','build','switch','read','build','find'].slice(0,n)));
+  }
+  return {rounds, r:0, i:0, start:Date.now(), correct:0, total:0, extra:false, misses:[], taught};
+}
+function targetGrapheme(p, opts){
+  // 70% current level, 30% review of weakest earlier graphemes (spaced cumulative review)
+  opts=opts||{};
+  const L=levelOf(p.level);
+  if(L.g[0]==='blend' && opts.pseudo && Math.random()<0.7) return 'blend';
+  const cur=L.g.filter(g=>G[g]&&!['blend','syll','morph'].includes(g));
+  const prev=taughtGraphemes(p).filter(g=>!cur.includes(g));
+  if(cur.length && (!prev.length || Math.random()<0.7)){
+    const weights=cur.map(g=>0.2+weakness(p,g)); return weightedPick(cur,weights);
+  }
+  if(!prev.length) return cur[0]||'s';
+  return weightedPick(prev, prev.map(g=>0.1+weakness(p,g)));
+}
+function weightedPick(items,w){ const sum=w.reduce((a,b)=>a+b,0); let r=Math.random()*sum; for(let i=0;i<items.length;i++){ r-=w[i]; if(r<=0) return items[i]; } return items[items.length-1]; }
+function wordWith(p,g,maxLen){
+  const L=levelOf(p.level);
+  let pool=wordsFor(p,p.level).filter(w=>g==='blend'?tokenize(w).filter(t=>!t.silent).length>=4:tokenize(w).some(t=>t.g===g));
+  if(maxLen) pool=pool.filter(w=>tokenize(w).filter(t=>!t.silent).length<=maxLen);
+  const cur=levelWords(L).filter(w=>pool.includes(w));
+  if(cur.length && Math.random()<0.6) return pick(cur);
+  return pool.length?pick(pool):(levelWords(L)[0]||'sat');
+}
+function distractorsG(g, taught, n){
+  const out=[]; const conf=(CONFUSE[g]||[]).filter(x=>taught.includes(x)&&x!==g);
+  shuffle(conf).forEach(x=>{ if(out.length<n) out.push(x); });
+  shuffle(taught.filter(x=>x!==g&&!out.includes(x))).forEach(x=>{ if(out.length<n) out.push(x); });
+  while(out.length<n){ const extra=['s','a','t','p','i','n','m','d'].find(x=>x!==g&&!out.includes(x)); if(!extra) break; out.push(extra); }
+  return out;
+}
+function distractorWords(p,word,n){
+  const toks=tokenize(word); const pool=wordsFor(p,p.level).filter(w=>w!==word);
+  // prefer minimal pairs: same length, differ in one grapheme
+  const minimal=pool.filter(w=>{ const t=tokenize(w); if(t.length!==toks.length) return false; let d=0; for(let i=0;i<t.length;i++) if(t[i].t!==toks[i].t) d++; return d===1; });
+  const out=shuffle(minimal).slice(0,n);
+  shuffle(pool.filter(w=>!out.includes(w)&&Math.abs(w.length-word.length)<=1)).forEach(w=>{ if(out.length<n) out.push(w); });
+  return out;
+}
+function makeRound(p,types){
+  const taught=taughtGraphemes(p); const L=levelOf(p.level); const items=[];
+  const hearts=heartsFor(p);
+  for(const t of types){
+    if(t==='spy'){ const g=targetGrapheme(p); const mode=Math.random()<.5?'g2k':'k2g'; items.push({t,g,mode,opts:shuffle([g,...distractorsG(g,taught,2)])}); }
+    else if(t==='first'){ const g=targetGrapheme(p); const w=wordWith(p,g); const first=tokenize(w)[0].g; items.push({t,g:first,w,opts:shuffle([first,...distractorsG(first,taught,2)])}); }
+    else if(t==='count'){ const g=targetGrapheme(p); const w=wordWith(p,g,4); items.push({t,g,w,n:tokenize(w).filter(x=>!x.silent).length}); }
+    else if(t==='find'){ const g=targetGrapheme(p,{pseudo:true}); const w=wordWith(p,g); items.push({t,g,w,opts:shuffle([w,...distractorWords(p,w,2)])}); }
+    else if(t==='read'){ let g=targetGrapheme(p,{pseudo:true}); let w=wordWith(p,g); let tries=0; while(!PIC[w]&&tries++<12){ g=targetGrapheme(p,{pseudo:true}); w=wordWith(p,g); } if(!PIC[w]){ items.push({t:'find',g,w,opts:shuffle([w,...distractorWords(p,w,2)])}); continue; } const others=shuffle(Object.keys(PIC).filter(x=>x!==w&&PIC[x]!==PIC[w])).slice(0,2); items.push({t,g,w,opts:shuffle([w,...others])}); }
+    else if(t==='build'){ const g=targetGrapheme(p,{pseudo:true}); const w=wordWith(p,g,L.id>=9?5:4); items.push({t,g,w}); }
+    else if(t==='switch'){ const g=targetGrapheme(p); const w=wordWith(p,g,4); const t1=tokenize(w); const alts=distractorWords(p,w,1).filter(x=>{ const t2=tokenize(x); return t2.length===t1.length && t2.filter((y,i)=>y.t!==t1[i].t).length===1; }); if(!alts.length){ items.push({t:'build',g,w}); continue; } const w2=alts[0]; const diff=tokenize(w2).find((x,i)=>x.t!==t1[i].t); items.push({t,g:diff?diff.g:g,w,w2}); }
+    else if(t==='heart'){ if(!hearts.length){ items.push({t:'build',g:targetGrapheme(p),w:wordWith(p,targetGrapheme(p),4)}); continue; } const unknown=hearts.filter(h=>!(p.heart[h]>=3)); const w=unknown.length?pick(unknown):pick(hearts); items.push({t,w}); }
+    else if(t==='split'){ const it=pick(levelOf(14).items); items.push({t,w:it[0]+it[1],parts:[it[0],it[1]],type:it[2],g:'syll'}); }
+    else if(t==='peel'){ const it=pick(levelOf(15).items); items.push({t,w:(it[0]||'')+it[1]+(it[2]||''),pre:it[0],base:it[1],suf:it[2],mean:it[3],g:'morph'}); }
+    else if(t==='build2'){ const src=L.id===15?levelOf(15).items.map(x=>[(x[0]||''),x[1],(x[2]||'')].filter(Boolean)):levelOf(14).items.map(x=>[x[0],x[1]]); const parts=pick(src); items.push({t,w:parts.join(''),parts,g:L.id===15?'morph':'syll'}); }
+  }
+  return items;
+}
+
+/* --- play screen --- */
+let cur=null; // current item runtime state
+S.play=function(){
+  const p=P(); const s=session; if(!s) return S.home();
+  const round=s.rounds[s.r]; const item=round[s.i];
+  if(!item){ cur=null; return S.roundDone(); }
+  cur={item, miss:0, picked:[], sel:null, done:false};
+  const sk=SKINS[p.skin];
+  const prog=`<div class="progress">${round.map((_,i)=>`<i class="${i<s.i?'on':i===s.i?'now':''}"></i>`).join('')}</div>`;
+  const head=`<header class="bar"><button class="btn ghost small" data-act="quit" aria-label="Stop">✕</button><div class="title">${sk.round} ${s.r+1} · Level ${p.level}</div><span class="chip">${sk.icon} ${p.coll.length}</span></header>`;
+  return head+`<main class="stack">${prog}<div class="card stack" id="item">${itemHTML(item,p)}</div><div class="feedback" id="fb"></div></main>`;
+};
+S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g); else if(it.t==='first'||it.t==='count'||it.t==='find'||it.t==='build') sayWord(it.w); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
+
+function itemHTML(it,p){
+  const up=false;
+  if(it.t==='spy'){
+    if(it.mode==='g2k') return `<div class="prompt">Which sound is this?</div><div class="center">${hearBtn('hear')}</div><div class="emoji-big">${G[it.g].e}</div><p class="center muted">${esc(G[it.g].k)}</p><div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g.replace('_e','-e'))}</button>`).join('')}</div>`;
+    return `<div class="prompt">Which picture starts with this sound?</div><div class="center">${hearBtn('hear')}</div><div class="center"><span class="tile vowel" style="--tilepx:96px;${G[it.g].v?'':'border-color:var(--line)'}">${esc(it.g.replace('_e','-e'))}</span></div><div class="picks">${it.opts.map(g=>`<button class="pick emoji" data-act="pickg" data-v="${g}">${G[g].e}</button>`).join('')}</div>`;
+  }
+  if(it.t==='first') return `<div class="prompt">What is the first sound in…</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div>'}<div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g)}</button>`).join('')}</div>`;
+  if(it.t==='count') return `<div class="prompt">How many sounds do you hear?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div>'}<div class="picks">${[2,3,4,5].filter(n=>n<=Math.max(4,it.n)).map(n=>`<button class="pick" data-act="pickn" data-v="${n}"><span style="display:flex;gap:4px">${'▢'.repeat(n)}</span></button>`).join('')}</div>`;
+  if(it.t==='find') return `<div class="prompt">Find the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="picks">${it.opts.map(w=>`<button class="pick letters" data-act="pickw" data-v="${w}">${esc(w)}</button>`).join('')}</div>`;
+  if(it.t==='read'){ const toks=tokenize(it.w); return `<div class="prompt">Tap each sound, then blend</div><div class="tiles">${toks.map((t,i)=>`<button class="tile ${t.v?'vowel':''} ${t.silent?'silent':''}" data-act="snd" data-v="${t.g}" data-i="${i}">${esc(t.t)}</button>`).join('')}</div><div class="center"><button class="btn secondary" data-act="blend">Blend it ➜</button></div><div class="prompt">Which picture?</div><div class="picks">${it.opts.map(w=>`<button class="pick emoji" data-act="pickw" data-v="${w}">${PIC[w]}</button>`).join('')}</div>`; }
+  if(it.t==='build'){ const toks=tokenize(it.w); const need=toks.filter(t=>!t.silent); const bank=shuffle([...toks.map(t=>t.g), ...distractorsG(toks[rnd(toks.length)].g, taughtGraphemes(p), 2)]); cur.bank=bank; cur.need=toks;
+    return `<div class="prompt">Build the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="boxes" id="boxes">${toks.map((t,i)=>t.silent?`<div class="box outside" data-i="${i}"><span class="tile silent ghost" data-g="e">e</span></div>`:`<button class="box" data-act="unbox" data-i="${i}" aria-label="sound box ${i+1}"></button>`).join('')}</div><div class="tiles" id="bank">${bank.map((g,i)=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="bank" data-v="${g}" data-i="${i}">${esc(g.replace('_e',''))}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
+  if(it.t==='switch'){ const toks=tokenize(it.w); cur.now=toks.map(t=>t.g); const target=tokenize(it.w2); const diffI=target.findIndex((x,i)=>x.t!==toks[i].t); cur.diffI=diffI; const bank=shuffle([target[diffI].g,...distractorsG(target[diffI].g,taughtGraphemes(p),2)]);
+    return `<div class="prompt">Change one sound. Make it say…</div><div class="center">${hearBtn('hear2')}</div><div class="boxes" id="boxes">${toks.map((t,i)=>`<button class="box filled" data-act="swbox" data-i="${i}"><span class="tile ${t.v?'vowel':''}">${esc(t.t)}</span></button>`).join('')}</div><p class="center muted">Tap a box, then tap the new sound.</p><div class="tiles">${bank.map(g=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="swtile" data-v="${g}">${esc(g)}</button>`).join('')}</div>`; }
+  if(it.t==='heart'){ const w=it.w; const hint=HEART_HINT[w]||''; const idx=hint?w.indexOf(hint):-1; const html=idx>=0?esc(w.slice(0,idx))+`<span class="heart">${esc(hint)}</span>`+esc(w.slice(idx+hint.length)):esc(w); const letters=shuffle([...w.split(''),...distractorsG(w[0],taughtGraphemes(p),2)]); cur.need=w.split('').map(c=>({t:c,g:c})); cur.bank=letters;
+    return `<div class="prompt">Heart word — learn it by heart</div><div class="center">${hearBtn('hear')}</div><div class="wordbig" style="padding-top:1em">${html}</div><p class="center muted">The part with the ♥ does not play fair. Say it, then build it.</p><div class="boxes" id="boxes">${w.split('').map((c,i)=>`<button class="box" data-act="unbox" data-i="${i}" aria-label="letter box ${i+1}"></button>`).join('')}</div><div class="tiles" id="bank">${letters.map((g,i)=>`<button class="tile" data-act="bank" data-v="${g}" data-i="${i}">${esc(g)}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
+  if(it.t==='split'){ const w=it.w; return `<div class="prompt">Tap where the word splits</div><div class="center">${hearBtn('hear')}</div><div class="tiles" style="gap:0">${w.split('').map((c,i)=>`<span class="tile" style="border-radius:0;min-width:48px;padding:0 6px">${esc(c)}</span>${i<w.length-1?`<button class="tile ghost" data-act="cut" data-i="${i+1}" style="min-width:28px;padding:0;border-radius:0;height:var(--tilepx)">·</button>`:''}`).join('')}</div><p class="center muted">Rule box: ${esc(it.type)}</p>`; }
+  if(it.t==='peel'){ const w=it.w; const parts=[it.pre,it.base,it.suf].filter(Boolean); const wrong1=[it.pre?it.pre.slice(0,-1)||it.pre:null, it.pre?it.base.slice(0,1)+it.base.slice(1):it.base.slice(0,-1), it.suf?it.base.slice(-1)+it.suf:null].filter(Boolean); const wrong2=[it.pre?it.pre+it.base.slice(0,1):null, it.pre?it.base.slice(1):it.base.slice(0,-2)||it.base, it.suf?it.suf.slice(1)||it.suf:null].filter(Boolean);
+    const opts=shuffle([parts.join('·'),wrong1.join('·'),wrong2.join('·')].filter((x,i,a)=>a.indexOf(x)===i)); cur.answer=parts.join('·');
+    return `<div class="prompt">Peel the word into its parts</div><div class="center">${hearBtn('hear')}</div><div class="wordbig">${esc(w)}</div><div class="stack">${opts.map(o=>`<button class="pick letters" data-act="pickpart" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div><p class="center muted">${esc(it.pre?it.pre+'- means "'+it.mean+'"':it.suf?'-'+it.suf+' means "'+it.mean+'"':'')}</p>`; }
+  if(it.t==='build2'){ const parts=it.parts; const bank=shuffle([...parts, ...parts.map(x=>x.split('').reverse().join('')).filter(x=>!parts.includes(x)).slice(0,1), 'ing','un'].filter((x,i,a)=>a.indexOf(x)===i)); cur.need=parts.map(x=>({t:x,g:x})); cur.bank=bank;
+    return `<div class="prompt">Build the word from its chunks</div><div class="center">${hearBtn('hear')}</div><div class="boxes" id="boxes">${parts.map((c,i)=>`<button class="box" data-act="unbox" data-i="${i}" style="width:auto;min-width:calc(var(--tilepx) + 20px)"></button>`).join('')}</div><div class="tiles" id="bank">${bank.map((g,i)=>`<button class="tile" data-act="bank" data-v="${esc(g)}" data-i="${i}" style="font-size:1.4rem">${esc(g)}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
+  return '';
+}
+function fb(msg, good){ const el=$('#fb'); if(!el) return; el.textContent=msg; el.style.color=good?'var(--accent)':'var(--muted)'; }
+function praise(){ return pick(['You cracked it.','Nice slow sounding-out.','That is the code.','Yes — you blended it.','You listened carefully.','Code cracked.','Careful work. Yes.']); }
+function next(ok){
+  const p=P(), s=session, it=cur.item;
+  s.total++; if(ok) s.correct++;
+  if(!ok) s.misses.push(it);
+  cur.done=true;
+  setTimeout(()=>{ s.i++; if(s.i>=s.rounds[s.r].length && s.misses.length && !s.rounds[s.r]._requeued){ // revisit missed items once at the end of the round
+      s.rounds[s.r]._requeued=true; const re=s.misses.splice(0,2).map(x=>Object.assign({},x,{retry:true})); s.rounds[s.r].push(...re); }
+    go('play'); }, ok?900:1400);
+}
+function onCorrect(g, task, chosen){ const p=P(); if(g) record(p,g,task,true,chosen); SFX.good(); fb(praise(),true); next(true); }
+function onMiss(g, task, chosen, scaffold){
+  const p=P(); cur.miss++; SFX.again();
+  if(cur.miss===1){ fb('Almost. Listen again.'); if(g) record(p,g,task,false,chosen); if(scaffold) scaffold(1); return; }
+  // second miss: show the answer, model it, move on (errorless exit)
+  fb('Here it is. Watch, then we will see it again.'); if(scaffold) scaffold(2); next(false);
+}
+
+/* --- interactions --- */
+app.addEventListener('click', async e=>{
+  const b=e.target.closest('[data-act]'); if(!b) return;
+  const act=b.dataset.act, v=b.dataset.v; const p=P();
+  ac();
+  if(act==='home'){ go('home'); return; }
+  if(act==='switch'){ go('start'); return; }
+  if(act==='grown'){ go('gate'); return; }
+  if(act==='newprofile'){ go('newprofile'); return; }
+  if(act==='choose'){ DB.current=b.dataset.id; saveAll(); go('home'); return; }
+  if(act==='band'||act==='skin'){ S.newprofile[act]=v; b.parentElement.querySelectorAll('[data-act="'+act+'"]').forEach(x=>x.classList.remove('good')); b.classList.add('good'); const n=$('#pname').value.trim(); $('#createbtn').disabled=!(n&&S.newprofile.band&&S.newprofile.skin); return; }
+  if(act==='createprofile'){ const n=$('#pname').value.trim(); if(!n) return; const pr=newProfile(n,S.newprofile.band,S.newprofile.skin); DB.profiles.push(pr); DB.current=pr.id; saveAll(); speak('Hello '+n+'. You are a code breaker.'); go(pr.band==='older'?'placement':'home'); return; }
+  if(act==='play'){ session=buildSession(p); go('play'); return; }
+  if(act==='placement'){ go('placement'); return; }
+  if(act==='quit'){ endSession(false); go('home'); return; }
+  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g); else sayWord(it.w); return; }
+  if(act==='hear2'){ sayWord(cur.item.w2); return; }
+  if(cur&&cur.done) return;
+  if(act==='pickg'){ const it=cur.item; const g=it.g; if(v===g){ b.classList.add('good'); onCorrect(g, it.t==='spy'&&it.mode==='g2k'?'sound':'decode', v); } else { b.classList.add('wobble'); onMiss(g,'decode',v,(n)=>{ if(n===1){ b.classList.add('dim'); if(it.t==='spy') sayPhoneme(g); else sayWord(it.w); } else { app.querySelectorAll('[data-act="pickg"]').forEach(x=>{ if(x.dataset.v===g) x.classList.add('good'); else x.classList.add('dim'); }); sayPhoneme(g).then(()=>sayKeyword(g)); } }); } return; }
+  if(act==='pickn'){ const it=cur.item; if(+v===it.n){ b.classList.add('good'); onCorrect(it.g,'sound',null); } else { b.classList.add('wobble'); onMiss(it.g,'sound',null,(n)=>{ if(n===1){ b.classList.add('dim'); segmentAloud(it.w); } else { app.querySelectorAll('[data-act="pickn"]').forEach(x=>{ if(+x.dataset.v===it.n) x.classList.add('good'); else x.classList.add('dim'); }); segmentAloud(it.w); } }); } return; }
+  if(act==='pickw'){ const it=cur.item; if(v===it.w){ b.classList.add('good'); onCorrect(it.g,'decode',null); } else { b.classList.add('wobble'); const chosenTok=it.t==='find'?tokenize(v).find((x,i)=>x.t!==(tokenize(it.w)[i]||{}).t):null; onMiss(it.g,'decode',chosenTok?chosenTok.g:null,(n)=>{ if(n===1){ b.classList.add('dim'); sayWord(it.w); } else { app.querySelectorAll('[data-act="pickw"]').forEach(x=>{ if(x.dataset.v===it.w) x.classList.add('good'); else x.classList.add('dim'); }); segmentAloud(it.w).then(()=>sayWord(it.w)); } }); } return; }
+  if(act==='snd'){ b.classList.add('sel'); setTimeout(()=>b.classList.remove('sel'),300); await sayPhoneme(v); return; }
+  if(act==='blend'){ await segmentAloud(cur.item.w); await sayWord(cur.item.w); return; }
+  if(act==='bank'){ const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const empty=boxes.find(x=>!x.dataset.g); if(!empty) return; SFX.tap(); empty.dataset.g=v; empty.dataset.bi=b.dataset.i; empty.classList.add('filled'); empty.innerHTML=`<span class="tile ${G[v]&&G[v].v?'vowel':''}">${esc(v.replace('_e',''))}</span>`; b.classList.add('used'); $('#checkbtn').disabled=boxes.some(x=>!x.dataset.g); if(cur.item.t!=='heart'&&cur.item.t!=='build2') sayPhoneme(v); return; }
+  if(act==='unbox'){ if(!b.dataset.g) return; const bi=b.dataset.bi; const t=app.querySelector(`#bank [data-i="${bi}"]`); if(t) t.classList.remove('used'); delete b.dataset.g; delete b.dataset.bi; b.classList.remove('filled'); b.innerHTML=''; $('#checkbtn').disabled=true; return; }
+  if(act==='check'){ checkBuild(); return; }
+  if(act==='swbox'){ app.querySelectorAll('[data-act="swbox"]').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); cur.sel=+b.dataset.i; SFX.tap(); return; }
+  if(act==='swtile'){ const it=cur.item; if(cur.sel==null){ fb('Tap a box first.'); return; } const target=tokenize(it.w2)[cur.diffI].g; if(cur.sel===cur.diffI && v===target){ const box=app.querySelector(`[data-act="swbox"][data-i="${cur.sel}"]`); box.innerHTML=`<span class="tile ${G[v]&&G[v].v?'vowel':''} good">${esc(v)}</span>`; await sayWord(it.w2); onCorrect(target,'encode',v); } else { b.classList.add('wobble'); onMiss(target,'encode',v,(n)=>{ if(n===1){ sayWord(it.w2); app.querySelectorAll('[data-act="swbox"]').forEach(x=>{ if(+x.dataset.i===cur.diffI) x.classList.add('sel'); else x.classList.remove('sel'); }); cur.sel=cur.diffI; fb('Listen again. Which sound changed?'); } else { const box=app.querySelector(`[data-act="swbox"][data-i="${cur.diffI}"]`); box.innerHTML=`<span class="tile good">${esc(target)}</span>`; sayWord(it.w2); } }); } return; }
+  if(act==='cut'){ const it=cur.item; const at=+b.dataset.i; if(at===it.parts[0].length){ b.textContent='|'; b.classList.add('good'); await speak(it.parts[0]+'. '+it.parts[1]+'. '+it.w); onCorrect('syll','decode',null); } else { b.classList.add('wobble'); onMiss('syll','decode',null,(n)=>{ if(n===1){ fb(it.type==='VC/CV'?'Two consonants in the middle? Split between them.':it.type==='V/CV'?'Try splitting right after the first vowel.':it.type==='VC/V'?'If V/CV does not sound right, split after the consonant.':'Consonant + le: the last syllable is the "-'+it.parts[1]+'".'); } else { const right=app.querySelector(`[data-act="cut"][data-i="${it.parts[0].length}"]`); if(right){ right.textContent='|'; right.classList.add('good'); } speak(it.parts[0]+'. '+it.parts[1]+'. '+it.w); } }); } return; }
+  if(act==='pickpart'){ const it=cur.item; if(v===cur.answer){ b.classList.add('good'); await speak(cur.answer.split('·').join('. ')+'. '+it.w); onCorrect('morph','decode',null); } else { b.classList.add('wobble'); onMiss('morph','decode',null,(n)=>{ if(n===1){ b.classList.add('dim'); fb(it.pre?'Look for the prefix "'+it.pre+'" at the front.':'Look for the suffix "-'+it.suf+'" at the end.'); } else { app.querySelectorAll('[data-act="pickpart"]').forEach(x=>{ if(x.dataset.v===cur.answer) x.classList.add('good'); else x.classList.add('dim'); }); } }); } return; }
+  // break + done screens
+  if(act==='pickbreak'){ go('break',v); return; }
+  if(act==='ready'){ cleanupBreak(); session.r++; session.i=0; go('play'); return; }
+  if(act==='more'){ session.extra=true; session.rounds.push(makeRound(p,['find','build','spy','read','build','switch','count','build','find'].slice(0,p.band==='young'?6:9))); session.r++; session.i=0; go('play'); return; }
+  if(act==='finish'){ endSession(true); go('home'); return; }
+  // placement
+  if(act==='placeans'){ placementAnswer(v); return; }
+  if(act==='placedone'){ go('home'); return; }
+  // gate + grown-ups
+  if(act==='gateok'){ const a=+($('#gatea').value||0); if(a===S.gate.ans){ go('grown'); } else { toast('Not quite — try again'); S.gate.n=null; render(); } return; }
+  if(act==='set'){ const k=b.dataset.k; DB.settings[k]=v; saveAll(); render(); return; }
+  if(act==='setvoice'){ DB.settings.voice=$('#voicesel').value; saveAll(); speak('Hello, I am your reading voice.'); return; }
+  if(act==='testvoice'){ speak('The cat sat on the mat.'); return; }
+  if(act==='rec'){ S.grown.recOpen=true; recordClip(b.dataset.k, b); return; }
+  if(act==='playclip'){ playClip(DB.voice[b.dataset.k]); return; }
+  if(act==='delclip'){ delete DB.voice[b.dataset.k]; saveVoice(); render(); return; }
+  if(act==='export'){ const code=btoa(unescape(encodeURIComponent(JSON.stringify({profiles:DB.profiles,settings:DB.settings})))); $('#code').value=code; try{ await navigator.clipboard.writeText(code); toast('Copied progress code'); }catch(e){ $('#code').select(); toast('Code shown below — copy it'); } return; }
+  if(act==='import'){ try{ const d=JSON.parse(decodeURIComponent(escape(atob($('#code').value.trim())))); if(d.profiles){ d.profiles.forEach(np=>{ const i=DB.profiles.findIndex(x=>x.id===np.id); if(i>=0) DB.profiles[i]=np; else DB.profiles.push(np); }); if(d.settings) DB.settings=d.settings; saveAll(); toast('Progress restored'); render(); } }catch(e){ toast('That code did not work'); } return; }
+  if(act==='resetprofile'){ const pr=DB.profiles.find(x=>x.id===b.dataset.id); if(!pr) return; if(b.dataset.sure!=='1'){ b.dataset.sure='1'; b.textContent='Tap again to confirm reset'; return; } pr.level=1; pr.g={}; pr.conf={}; pr.coll=[]; pr.sessions=[]; pr.heart={}; pr.placed=pr.band==='young'; saveAll(); toast('Reset'); render(); return; }
+  if(act==='delprofile'){ if(b.dataset.sure!=='1'){ b.dataset.sure='1'; b.textContent='Tap again to delete'; return; } DB.profiles=DB.profiles.filter(x=>x.id!==b.dataset.id); if(DB.current===b.dataset.id) DB.current=DB.profiles[0]?DB.profiles[0].id:null; saveAll(); render(); return; }
+  if(act==='setlevel'){ const pr=DB.profiles.find(x=>x.id===b.dataset.id); pr.level=+$('#lvl'+pr.id).value; saveAll(); toast('Level set to '+pr.level); return; }
+  if(act==='why'){ go('why'); return; }
+});
+app.addEventListener('input', e=>{
+  if(e.target.id==='pname'){ const n=e.target.value.trim(); $('#createbtn').disabled=!(n&&S.newprofile.band&&S.newprofile.skin); }
+  if(e.target.id==='ls'){ DB.settings.ls=+e.target.value; saveAll(); applySettings(); }
+  if(e.target.id==='rate'){ DB.settings.rate=+e.target.value; saveAll(); }
+});
+async function segmentAloud(w){ const toks=tokenize(w).filter(t=>!t.silent); for(const t of toks){ await sayPhoneme(t.g); await new Promise(r=>setTimeout(r,120)); } }
+function checkBuild(){
+  const it=cur.item; const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const got=boxes.map(x=>x.dataset.g); const need=cur.need.filter(t=>!t.silent).map(t=>t.g);
+  const ok=got.every((g,i)=>g===need[i]);
+  const p=P();
+  if(ok){ boxes.forEach(x=>x.querySelector('.tile').classList.add('good')); if(it.t==='heart'){ p.heart[it.w]=(p.heart[it.w]||0)+1; saveAll(); sayWord(it.w); SFX.good(); fb(praise(),true); next(true); } else { sayWord(it.w); onCorrect(it.g,'encode',null); } return; }
+  const wrongI=got.findIndex((g,i)=>g!==need[i]); const chosen=got[wrongI];
+  boxes.forEach((x,i)=>{ if(got[i]!==need[i]) x.querySelector('.tile').classList.add('wobble'); });
+  if(it.t==='heart'){ cur.miss++; SFX.again(); if(cur.miss===1){ fb('Almost. Fix the wobbly ones.'); boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; sayWord(it.w); } else { fb('Here it is.'); boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile good">${esc(need[i])}</span>`; }); next(false); } return; }
+  onMiss(need[wrongI],'encode',chosen,(n)=>{
+    if(n===1){ boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; segmentAloud(it.w).then(()=>sayWord(it.w)); }
+    else { boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile ${G[need[i]]&&G[need[i]].v?'vowel':''} good">${esc(need[i].replace('_e',''))}</span>`; }); segmentAloud(it.w).then(()=>sayWord(it.w)); }
+  });
+}
+
+/* --- round done / break / session done --- */
+S.roundDone=function(){
+  const p=P(), s=session, sk=SKINS[p.skin];
+  const gem=pick(sk.coll); if(!s._awarded||s._awarded!==s.r){ s._awarded=s.r; p.coll.push(gem); saveAll(); SFX.win(); setTimeout(confetti,50); }
+  const advanced=checkAdvance(p);
+  const last = s.r>=s.rounds.length-1;
+  const mins=Math.round((Date.now()-s.start)/60000);
+  if(advanced){ setTimeout(()=>speak('New code unlocked. Level '+p.level+'.'),400); }
+  if(last){
+    return `<header class="bar"><div class="title">All done for today</div></header><main class="stack"><div class="card stack center"><div class="emoji-big">${gem}</div><h1>${advanced?'New code unlocked!':'Round complete'}</h1><p>You found a ${sk.noun.replace(/s$/,'')}: ${gem}</p>${advanced?`<p class="chip">Level ${p.level} · ${esc(levelOf(p.level).name)}</p>`:''}<p class="muted">${mins} minute${mins===1?'':'s'} of careful work. Brains grow when they rest, too.</p><button class="btn big" data-act="finish">Finish ✓</button>${!s.extra?`<button class="btn ghost" data-act="more">One more round</button>`:''}</div></main>`;
+  }
+  return `<header class="bar"><div class="title">Round ${s.r+1} done</div></header><main class="stack"><div class="card stack center"><div class="emoji-big">${gem}</div><h1>${advanced?'New code unlocked!':'You found a '+sk.noun.replace(/s$/,'')+'!'}</h1>${advanced?`<p class="chip">Level ${p.level} · ${esc(levelOf(p.level).name)}</p>`:''}<p class="muted">Time to rest your brain. Pick a calm game.</p><div class="picks">${BREAKS.map(b=>`<button class="pick" data-act="pickbreak" data-v="${b.id}"><span style="font-size:2rem">${b.icon}</span><span style="font-size:1rem">${b.name}</span></button>`).join('')}</div></div></main>`;
+};
+S.break=function(id){
+  const b=BREAKS.find(x=>x.id===id)||BREAKS[0];
+  const inner = id==='breathe' ? `<div class="bubble" id="bubble"></div><div class="breathlabel" id="blabel">Breathe in…</div>` : `<canvas id="cv"></canvas>`;
+  return `<header class="bar"><div class="title">${b.icon} ${b.name}</div></header><main class="stack"><div class="breakwrap" id="bw">${inner}</div><p class="center muted" id="bhint">${id==='breathe'?'Follow the bubble with your breath.':id==='garden'?'Tap anywhere to plant a flower. Watch it grow.':id==='bubbles'?'Pop a bubble, or just watch them float.':'Drag your finger to draw a trail of stars.'}</p><div class="center"><button class="btn big" data-act="ready" id="readybtn" disabled>Ready for more? ➜</button></div></main>`;
+};
+S.break.after=function(id){
+  const ready=$('#readybtn'); breakTimer=setTimeout(()=>{ ready.disabled=false; ready.textContent='Ready for more? ➜'; },45000);
+  let left=45; const tick=setInterval(()=>{ left--; if(left<=0){ clearInterval(tick); return; } ready.textContent=`Resting… ${left}`; },1000); S.break._tick=tick;
+  if(id==='breathe'){ const bub=$('#bubble'), lab=$('#blabel'); let phase=0; const phases=[['Breathe in…','in'],['Hold…','hold'],['Breathe out…','out'],['Hold…','hold']];
+    function step(){ const [t,c]=phases[phase%4]; lab.textContent=t; if(c==='in') bub.classList.add('in'); if(c==='out') bub.classList.remove('in'); phase++; } step(); S.break._iv=setInterval(step,4000); return; }
+  const cv=$('#cv'), wrap=$('#bw'); const ctx=cv.getContext('2d'); function size(){ cv.width=wrap.clientWidth*devicePixelRatio; cv.height=wrap.clientHeight*devicePixelRatio; } size();
+  const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#2F7D6B'; const gem=getComputedStyle(document.documentElement).getPropertyValue('--gem').trim()||'#C45C8B'; const warm=getComputedStyle(document.documentElement).getPropertyValue('--warm').trim()||'#F2B544';
+  const W=()=>cv.width, H=()=>cv.height, dpr=devicePixelRatio;
+  const pt=e=>{ const r=cv.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:(t.clientX-r.left)*dpr,y:(t.clientY-r.top)*dpr}; };
+  if(id==='garden'){ const flowers=[]; const plant=e=>{ e.preventDefault(); const q=pt(e); flowers.push({x:q.x,y:Math.max(q.y,H()*.5),h:0,max:60+Math.random()*120,c:pick([gem,warm,acc,'#E88D67','#8FB3E0']),t:Math.random()*6}); SFX.pop(); };
+    cv.addEventListener('pointerdown',plant);
+    (function draw(){ ctx.clearRect(0,0,W(),H()); ctx.fillStyle=acc+'33'; ctx.fillRect(0,H()*.72,W(),H()); flowers.forEach(f=>{ f.h=Math.min(f.max,f.h+0.8); f.t+=0.02; const sway=Math.sin(f.t)*6*dpr; ctx.strokeStyle=acc; ctx.lineWidth=4*dpr; ctx.beginPath(); ctx.moveTo(f.x,f.y); ctx.quadraticCurveTo(f.x+sway,f.y-f.h*dpr*.5,f.x+sway,f.y-f.h*dpr); ctx.stroke(); const r=Math.min(14,f.h/4)*dpr; for(let i=0;i<6;i++){ const a=i/6*Math.PI*2+f.t; ctx.fillStyle=f.c; ctx.beginPath(); ctx.ellipse(f.x+sway+Math.cos(a)*r,f.y-f.h*dpr+Math.sin(a)*r,r*.7,r*.45,a,0,Math.PI*2); ctx.fill(); } ctx.fillStyle=warm; ctx.beginPath(); ctx.arc(f.x+sway,f.y-f.h*dpr,r*.5,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
+  if(id==='bubbles'){ const bs=Array.from({length:14},()=>({x:Math.random()*W(),y:H()+Math.random()*H(),r:(14+Math.random()*26)*dpr,s:(0.2+Math.random()*0.4)*dpr,w:Math.random()*6}));
+    cv.addEventListener('pointerdown',e=>{ e.preventDefault(); const q=pt(e); bs.forEach(b=>{ if(Math.hypot(b.x-q.x,b.y-q.y)<b.r*1.3){ b.y=H()+40; b.x=Math.random()*W(); SFX.pop(); } }); });
+    (function draw(){ ctx.clearRect(0,0,W(),H()); bs.forEach(b=>{ b.y-=b.s; b.w+=0.01; b.x+=Math.sin(b.w)*0.3*dpr; if(b.y<-b.r){ b.y=H()+b.r; b.x=Math.random()*W(); } const g=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,b.r*.1,b.x,b.y,b.r); g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(1,acc+'55'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
+  if(id==='stars'){ const stars=[]; let down=false; const add=e=>{ const q=pt(e); stars.push({x:q.x,y:q.y,r:(2+Math.random()*4)*dpr,a:1,c:pick([warm,'#fff',gem])}); };
+    cv.addEventListener('pointerdown',e=>{ e.preventDefault(); down=true; add(e); }); cv.addEventListener('pointermove',e=>{ if(down) add(e); }); cv.addEventListener('pointerup',()=>down=false); cv.addEventListener('pointercancel',()=>down=false);
+    (function draw(){ ctx.fillStyle='#1b1f3a'; ctx.fillRect(0,0,W(),H()); stars.forEach(s=>{ s.a=Math.max(0.15,s.a-0.002); ctx.globalAlpha=s.a; ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1; if(stars.length>600) stars.splice(0,stars.length-600); animId=requestAnimationFrame(draw); })(); return; }
+};
+function cleanupBreak(){ if(breakTimer){ clearTimeout(breakTimer); breakTimer=null; } if(S.break._iv){ clearInterval(S.break._iv); S.break._iv=null; } if(S.break._tick){ clearInterval(S.break._tick); S.break._tick=null; } if(animId){ cancelAnimationFrame(animId); animId=null; } }
+function endSession(done){ const p=P(); if(!session||!p) return; const min=(Date.now()-session.start)/60000; if(session.total>0) p.sessions.push({t:session.start,min:Math.round(min*10)/10,ok:session.correct,n:session.total,lvl:p.level,done}); if(p.sessions.length>200) p.sessions.shift(); saveAll(); session=null; }
+
+/* --- placement (older learners) --- */
+S.placement=function(){
+  const p=P(); if(!S.placement.q){ const qs=[]; for(let L=2;L<=13;L++){ const lv=levelOf(L); const ws=shuffle(lv.words).slice(0,2); ws.forEach(w=>qs.push({L,w})); } S.placement.q=qs; S.placement.i=0; S.placement.fail={}; }
+  const q=S.placement.q[S.placement.i];
+  if(!q){ // decide level: first level with any miss, else 14
+    let lvl=14; for(let L=2;L<=13;L++){ if(S.placement.fail[L]){ lvl=L; break; } }
+    p.level=lvl; p.placed=true; saveAll(); const res=S.placement; S.placement.q=null;
+    return bar('Quick check done')+`<main class="stack"><div class="card stack center"><div class="emoji-big">🧭</div><h1>Start at Level ${lvl}</h1><p class="muted">${esc(levelOf(lvl).name)}. You can change this on the Grown-ups page any time.</p><button class="btn big" data-act="placedone">Go to my ${SKINS[p.skin].word}</button></div></main>`;
+  }
+  const opts=shuffle([q.w,...distractorWords({level:13},q.w,2)]);
+  return bar('Quick check')+`<main class="stack"><div class="progress">${S.placement.q.map((_,i)=>`<i class="${i<S.placement.i?'on':i===S.placement.i?'now':''}"></i>`).join('')}</div><div class="card stack"><div class="prompt">Find the word you hear</div><div class="center"><button class="hear" data-act="placehear">🔊</button></div><div class="picks">${opts.map(w=>`<button class="pick letters" data-act="placeans" data-v="${w}">${esc(w)}</button>`).join('')}</div><p class="center muted">No pressure. Misses just tell us where to start.</p></div></main>`;
+};
+S.placement.after=function(){ const q=S.placement.q&&S.placement.q[S.placement.i]; if(q) setTimeout(()=>sayWord(q.w),300); };
+function placementAnswer(v){ const q=S.placement.q[S.placement.i]; if(v!==q.w) S.placement.fail[q.L]=true; else SFX.tap(); S.placement.i++; render(); }
+app.addEventListener('click',e=>{ const b=e.target.closest('[data-act="placehear"]'); if(b){ const q=S.placement.q[S.placement.i]; if(q) sayWord(q.w); } });
+
+/* --- grown-ups --- */
+S.gate=function(){ if(!S.gate.n){ const a=3+rnd(7), b=4+rnd(6); S.gate.n=[a,b]; S.gate.ans=a*b; } const [a,b]=S.gate.n;
+  return bar('Grown-ups')+`<main class="stack"><div class="card stack"><h2>Quick check for grown-ups</h2><p class="muted">What is ${a} × ${b}?</p><input type="text" id="gatea" inputmode="numeric" autocomplete="off" aria-label="answer"><button class="btn" data-act="gateok">Enter</button></div></main>`; };
+S.gate.after=function(){ const i=$('#gatea'); i.focus(); i.addEventListener('keydown',e=>{ if(e.key==='Enter') app.querySelector('[data-act="gateok"]').click(); }); };
+
+S.grown=function(){
+  const s=DB.settings; const canRec=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+  const profiles=DB.profiles.map(p=>{
+    const taught=taughtGraphemes(p); const allG=LEVELS.flatMap(l=>l.g).filter(g=>G[g]);
+    const grid=allG.map(g=>{ const m=taught.includes(g)||['blend','syll','morph'].includes(g)?mastery(p,g):'new'; return `<div class="cell ${m}" title="${esc(G[g].k)}">${['blend','syll','morph'].includes(g)?G[g].e:esc(g.replace('_e','-e'))}</div>`; }).join('');
+    const conf=Object.entries(p.conf).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const week=p.sessions.filter(x=>Date.now()-x.t<7*864e5); const wmin=week.reduce((a,x)=>a+x.min,0); const acc=week.reduce((a,x)=>a+x.ok,0)/Math.max(1,week.reduce((a,x)=>a+x.n,0));
+    const reversals=conf.filter(([k])=>/^(b>d|d>b|p>q|q>p|m>n|n>m|m>w|w>m|u>n|n>u)$/.test(k));
+    return `<details ${DB.current===p.id?'open':''}><summary>${SKINS[p.skin].icon} ${esc(p.name)} — Level ${p.level} · ${esc(levelOf(p.level).name)}</summary><div class="stack" style="padding-top:10px">
+      <div class="row"><span class="chip">${week.length} session${week.length===1?'':'s'} this week</span><span class="chip">${Math.round(wmin)} min</span><span class="chip">${week.length?Math.round(acc*100)+'% accurate':'no data yet'}</span></div>
+      <div><div style="font-weight:700;margin-bottom:6px">Code mastery</div><div class="grid">${grid}</div><div class="legend" style="margin-top:6px"><span><i style="opacity:.5"></i>not started</span><span><i style="background:var(--box);border-color:var(--warm)"></i>practising</span><span><i style="background:var(--soft);border-color:var(--accent)"></i>secure (7 of last 8, incl. 3+ spelling)</span></div></div>
+      ${conf.length?`<div><div style="font-weight:700;margin-bottom:6px">Mix-ups to watch</div><div class="tablewrap"><table><tr><th>Expected</th><th>Chose</th><th>Times</th></tr>${conf.map(([k,n])=>{ const [a,b]=k.split('>'); return `<tr><td class="letters">${esc(a)}</td><td class="letters">${esc(b)}</td><td>${n}</td></tr>`; }).join('')}</table></div>${reversals.length?`<p class="cite" style="margin-top:6px">Letter reversals are common in early readers. The WWC panel advises teaching one letter of the pair until it is instant, then the other, then mixing. Keep sessions short; do not drill both at once.</p>`:''}</div>`:''}
+      <div class="row"><label class="field grow">Set level <select id="lvl${p.id}">${LEVELS.map(l=>`<option value="${l.id}" ${l.id===p.level?'selected':''}>${l.id} · ${esc(l.name)}</option>`).join('')}</select></label><button class="btn small secondary" data-act="setlevel" data-id="${p.id}">Apply</button></div>
+      <div class="row"><button class="btn small ghost" data-act="resetprofile" data-id="${p.id}">Reset progress</button><button class="btn small ghost" data-act="delprofile" data-id="${p.id}">Delete player</button></div>
+    </div></details>`; }).join('');
+  const recRows=[...Object.keys(G).filter(g=>!['blend','syll','morph'].includes(g))].map(g=>`<tr><td class="letters" style="font-size:1.2rem">${esc(g.replace('_e','-e'))}<div class="cite">${esc(G[g].k)}${G[g].say?'':' · stop sound: clip it short'}</div></td><td><div class="row">${DB.voice['g:'+g]?`<button class="btn small secondary" data-act="playclip" data-k="g:${g}">▶</button><button class="btn small ghost" data-act="delclip" data-k="g:${g}">✕</button>`:''}<button class="btn small ${DB.voice['g:'+g]?'ghost':''}" data-act="rec" data-k="g:${g}">${DB.voice['g:'+g]?'Re-record':'● Record'}</button></div></td></tr>`).join('');
+  return bar('Grown-ups',`<button class="btn ghost small" data-act="why">Why it works</button>`)+`<main class="stack">
+    <div class="card stack"><h2>Players</h2>${profiles||'<p class="muted">No players yet.</p>'}</div>
+    <div class="card stack"><h2>Reading voice</h2>
+      <p class="cite">Whole words use the device's text-to-speech. Isolated sounds are the weak spot of any synthetic voice (it adds "uh" after stop sounds — "buh" instead of /b/). Recording your own clipped sounds fixes that and lets her hear a familiar voice.</p>
+      <div class="row"><label class="field grow">Voice <select id="voicesel">${VOICES.map(v=>`<option ${v.name===s.voice?'selected':''}>${esc(v.name)}</option>`).join('')||'<option>Default</option>'}</select></label><button class="btn small secondary" data-act="setvoice">Use</button><button class="btn small ghost" data-act="testvoice">Test</button></div>
+      <label class="field">Speed <input type="range" id="rate" min="0.6" max="1.1" step="0.05" value="${s.rate}"></label>
+      ${canRec?`<details ${S.grown.recOpen?'open':''}><summary>Record the sounds in your voice (about 4 minutes)</summary><p class="cite" style="margin:8px 0">Say the pure sound once, short and clear: "mmm" not "muh", "t" not "tuh". Tap Record, say it, it stops by itself after 1.5 s.</p><div class="tablewrap"><table>${recRows}</table></div></details>`:`<p class="cite">Voice recording needs the microphone, which this viewer blocks. It works when the app is opened from its own web address.</p>`}
+    </div>
+    <div class="card stack"><h2>Look</h2>
+      <label class="field">Letter spacing <input type="range" id="ls" min="0" max="0.25" step="0.01" value="${s.ls}"></label>
+      <div class="row"><span style="font-weight:700">Letters</span>${['verdana','arial','lexend'].map(f=>`<button class="btn small ${s.font===f?'':'secondary'}" data-act="set" data-k="font" data-v="${f}">${f[0].toUpperCase()+f.slice(1)}</button>`).join('')}</div>
+      <div class="row"><span style="font-weight:700">Paper</span>${[['cream','Cream'],['white','White']].map(([k,n])=>`<button class="btn small ${s.paper===k?'':'secondary'}" data-act="set" data-k="paper" data-v="${k}">${n}</button>`).join('')}</div>
+      <div class="row"><span style="font-weight:700">Theme</span>${[['auto','Auto'],['light','Light'],['dark','Dark']].map(([k,n])=>`<button class="btn small ${s.theme===k?'':'secondary'}" data-act="set" data-k="theme" data-v="${k}">${n}</button>`).join('')}</div>
+      <p class="wordbig" style="font-size:1.8rem">the quick brown fox</p>
+    </div>
+    <div class="card stack"><h2>Move progress to another device</h2><p class="cite">Progress lives on this device only. Copy the code here and paste it on the other device.</p><div class="row"><button class="btn small secondary" data-act="export">Copy progress code</button><button class="btn small ghost" data-act="import">Restore from code</button></div><textarea id="code" aria-label="progress code" placeholder="Progress code"></textarea></div>
+  </main>`;
+};
+async function recordClip(key, btn){
+  try{ const stream=await navigator.mediaDevices.getUserMedia({audio:true}); const mr=new MediaRecorder(stream); const chunks=[]; mr.ondataavailable=e=>chunks.push(e.data);
+    mr.onstop=()=>{ stream.getTracks().forEach(t=>t.stop()); const blob=new Blob(chunks,{type:mr.mimeType||'audio/webm'}); const fr=new FileReader(); fr.onload=()=>{ DB.voice[key]=fr.result; saveVoice(); toast('Saved'); render(); }; fr.readAsDataURL(blob); };
+    btn.textContent='● Recording…'; mr.start(); setTimeout(()=>{ if(mr.state!=='inactive') mr.stop(); },1500);
+  }catch(e){ toast('Microphone not available'); }
+}
+
+/* --- why it works --- */
+S.why=function(){
+  const C=(tag,txt)=>`<span class="ev">${tag}</span>${txt}`;
+  return bar('Why it works')+`<main class="stack">
+    <div class="card stack"><h2>What this app is, and is not</h2>
+      <p>Code Breakers is a practice tool built on structured-literacy routines with the strongest evidence for beginning and struggling readers. It is not a diagnosis, not a replacement for a reading specialist, and not "Orton-Gillingham certified" (see the honesty note below).</p>
+      <p class="cite">Evidence tags: <span class="ev">Strong</span> rated strong by an independent review · <span class="ev">Meta</span> meta-analysis · <span class="ev">Study</span> single study · <span class="ev">Practice</span> expert practice, not trial-tested · <span class="ev">Assumed</span> our design choice, not sourced.</p></div>
+    <div class="card stack"><h3>1. Sounds first, linked to letters</h3>
+      <p>${C('Strong','The IES/What Works Clearinghouse practice guide rates "develop awareness of the segments of sound in speech and how they link to letters" as <b>strong evidence</b> (17 studies, all positive). It names Elkonin sound boxes, continuous-sound words first (f, l, m, n, r, s, v, z), and word-building with letter tiles.')}</p>
+      <p class="cite">Foorman et al. (2016). <i>Foundational Skills to Support Reading for Understanding in K–3</i>, NCEE 2016-4008, Recommendation 2. <a href="https://ies.ed.gov/ncee/wwc/PracticeGuide/21" target="_blank" rel="noopener">ies.ed.gov/ncee/wwc/PracticeGuide/21</a></p>
+      <p class="muted">In the app: Sound Spy, First Sound, Count the Sounds, and the sound boxes in Build It.</p></div>
+    <div class="card stack"><h3>2. Decode and encode together</h3>
+      <p>${C('Strong','The same guide rates "teach students to decode words, analyze word parts, and write and recognize words" as <b>strong evidence</b> (18 studies; 13 positive on word reading and/or encoding). It prescribes left-to-right blending, sound–spelling patterns one at a time, Elkonin boxes with letter tiles, and word-analysis for prefixes/suffixes.')}</p>
+      <p class="cite">Same guide, Recommendation 3.</p>
+      <p>${C('Meta','Spelling instruction improves reading: Graham & Santangelo (2014) meta-analysis of 53 studies found formal spelling instruction improved spelling (d≈0.54) and also reading performance.')}</p>
+      <p class="cite">Graham, S., & Santangelo, T. (2014). <i>Reading and Writing</i>, 27, 1703–1743. doi:10.1007/s11145-014-9517-0</p>
+      <p class="muted">In the app: every round pairs reading tasks (Find It, Read It) with spelling tasks (Build It, Switch It). A code is "secure" only after spelling practice, not just recognition.</p></div>
+    <div class="card stack"><h3>3. Systematic phonics has the largest evidence base for dyslexia</h3>
+      <p>${C('Meta','National Reading Panel (2000), 38 studies: systematic phonics d = 0.44 overall, and larger the earlier it starts — kindergarten d = 0.56, grade 1 d = 0.54, grades 2–6 d = 0.27; at-risk first graders d = 0.74. That is the case for starting at 5, not waiting to see.')}</p>
+      <p class="cite">NICHD (2000). <i>Report of the National Reading Panel</i>, Ch. 2 Part II. <a href="https://www.nichd.nih.gov/sites/default/files/publications/pubs/nrp/Documents/ch2-II.pdf" target="_blank" rel="noopener">nichd.nih.gov</a></p>
+      <p>${C('Meta','Galuschka et al. (2014), 22 randomized trials with children and adolescents with reading disability: phonics instruction was the only approach with a statistically confirmed effect on reading and spelling. Coloured overlays, auditory training and motor exercises did not reach significance.')}</p>
+      <p class="cite">Galuschka, K., Ise, E., Krick, K., & Schulte-Körne, G. (2014). <i>PLoS ONE</i> 9(2): e89900. doi:10.1371/journal.pone.0089900</p>
+      <p>${C('Meta','Hall et al. (2023), 53 studies, 6,053 K–5 students with or at risk for dyslexia: overall g = 0.33, and <b>more dosage produced larger effects</b>. Short, daily, and sustained beats occasional.')}</p>
+      <p class="cite">Hall, C., et al. (2023). <i>Reading Research Quarterly</i>. doi:10.1002/rrq.477</p>
+      <p>${C('Meta','Honesty note: the branded "Orton-Gillingham" label is not itself proven. Stevens et al. (2021) pooled 24 studies and found a positive but <b>not statistically significant</b> effect on foundational skills (g = 0.22). The ingredients OG shares with other explicit, systematic phonics are what the evidence supports; the multisensory claim specifically has not been isolated and tested.')}</p>
+      <p class="cite">Stevens, E. A., et al. (2021). <i>Exceptional Children</i>, 87(4), 397–417. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8497161" target="_blank" rel="noopener">PMC8497161</a></p></div>
+    <div class="card stack"><h3>4. Order of the codes</h3>
+      <p>${C('Practice','The letter order (s a t p · i n m d · g o c k · ck e u r · h b f l …) follows the UK Letters and Sounds Phase 2/3 sequence: early sets build real words at once, b and d are separated by several sets, and letters with variable sounds come last. The WWC panel likewise suggests starting with /s/, /m/, /d/, /p/, /a/ and teaching digraphs as a unit, then silent-e, then vowel teams.')}</p>
+      <p>${C('Practice','Letter reversals (b/d): the WWC panel advises teaching one letter until instant, then the other, then mixing. The Grown-ups page flags reversal mix-ups so you can do that.')}</p></div>
+    <div class="card stack"><h3>5. No timers, no red X, high success rate</h3>
+      <p>${C('Meta','Children with learning disabilities carry more anxiety than peers (Nelson & Harwood 2011, 58 studies, d = 0.61; Vieira et al. 2024, 96 studies, internalizing problems g = −0.54), and reading anxiety tracks lower reading achievement (Johnson et al. 2026, 64 studies, r = −.30, correlational). So: no timers, no countdowns, no scores a child can see. Speed is tracked nowhere in the child-facing app.')}</p>
+      <p class="cite">Nelson & Harwood (2011) <i>J. Learning Disabilities</i> 44(1) doi:10.1177/0022219409359939 · Vieira et al. (2024) <i>Annals of Dyslexia</i> 74(1) doi:10.1007/s11881-023-00294-4</p>
+      <p>${C('Practice','Errors get a neutral tone and a scaffold (replay the sound, remove a choice). On a second miss the answer is modelled and the item returns later in the round, so the child never ends on a failure.')}</p>
+      <p>${C('Assumed','Session design — three short rounds separated by calm breaks, with a hard "all done" cap — is our choice. We found no trial that tests break length or type for this age group; the common 2–3 minutes-per-year-of-age attention heuristic is folk wisdom, not research. Watch her fatigue and adjust.')}</p></div>
+    <div class="card stack"><h3>6. Dyslexia-friendly type</h3>
+      <p>${C('Study','Wider letter spacing helped: Zorzi et al. (2012), 74 dyslexic children aged 8–14, extra-large spacing improved reading accuracy and speed (PNAS 109(28):11455). The spacing slider is on the Grown-ups page.')}</p>
+      <p>${C('Meta','"Dyslexia fonts" did not help: Wery & Diliberto (2017) found no gain for OpenDyslexic; Kuster et al. (2018) found none for Dyslexie versus Arial, and children preferred Arial. A 2026 meta-analysis of 15 studies (688 readers) puts the pooled effect at g = −0.04. The app defaults to Verdana; Lexend is offered for comfort, not as a treatment.')}</p>
+      <p class="cite">Zorzi et al. 2012 doi:10.1073/pnas.1205566109 · Wery & Diliberto 2017 <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5629233/" target="_blank" rel="noopener">PMC5629233</a> · Kuster et al. 2018 doi:10.1007/s11881-017-0154-6 · Azzarello et al. 2026 <i>Annals of Dyslexia</i> (ahead of print)</p></div>
+    <div class="card stack"><h3>7. Girls and dyslexia</h3>
+      <p>${C('Study','Reading disability is somewhat more common in boys (ratios of roughly 1.5–2.5 : 1 in large unselected samples), but girls who meet the research criteria are identified by schools far less often: in a Florida sample of 491,103 second-graders, about 1 in 7 qualifying girls was school-identified versus 1 in 4 qualifying boys. A struggling girl should never be dismissed because school did not flag her.')}</p>
+      <p class="cite">Quinn, J. M., & Wagner, R. K. (2015). <i>Journal of Learning Disabilities</i>, 48(4). <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3997651" target="_blank" rel="noopener">PMC3997651</a> · Rutter et al. (2004) <i>JAMA</i> 291(16), 2007–2012.</p>
+      <p>${C('Assumed','Claims that girls "mask" or compensate differently appear on clinic websites; we found no peer-reviewed support, so the app does not gender anything. Four worlds are offered; let her choose.')}</p></div>
+    <div class="card stack"><h3>8. What was left out on purpose</h3>
+      <ul><li>Coloured overlays, tinted lenses, "vision therapy": the American Academy of Pediatrics and Academy of Ophthalmology joint statement (2009, <i>Pediatrics</i> 124(2)) found no evidence they improve educational outcomes; Galuschka 2014 agrees.</li><li>Working-memory / "brain training" games as reading remediation: Melby-Lervåg, Redick & Hulme (2016, 145 comparisons) found no transfer to decoding or comprehension. The calm breaks here are rests, not training, and the app never claims otherwise.</li><li>Learning-styles matching: Pashler et al. (2008) found no study that validates it. The app personalises by skill gap, not by "style".</li><li>Fast ForWord-style auditory training: What Works Clearinghouse rates its effects mixed to none.</li><li>Leaderboards, streaks and timers: comparison and time pressure are the opposite of what a struggling 5-year-old needs. Collectibles and the trail map stand in for points.</li></ul>
+      <p>${C('Meta','Text-to-speech as a reading accommodation helps older readers somewhat (Wood et al. 2018, 22 studies, g = 0.35, no RCTs, none below grade 3). Here it is a teaching voice, not a substitute for decoding: every word the app speaks, she still has to crack.')}</p></div>
+    <div class="card stack"><h3>How to use it (10–15 minutes a day)</h3>
+      <p>${C('Meta','Parents helping with <i>specific</i> skills beats just listening to the child read (Sénéchal & Young 2008, 16 studies, 1,340 families). That is why this page gives you tasks, not "read together".')}</p>
+      <p class="cite">Sénéchal, M., & Young, L. (2008). <i>Review of Educational Research</i> 78(4), 880–907. doi:10.3102/0034654308320319</p>
+      <ul><li>Sit beside her for the first week. Say the sounds with her, clipped and pure: "mmm", "sss", "t" (not "tuh").</li><li>One session a day beats one long session a week. Stop at the "all done" screen even if she wants more; "one more round" is allowed once.</li><li>When the trail unlocks a new level, celebrate the <i>work</i>: "you sounded that out slowly and it worked."</li><li>Check the Grown-ups page weekly for mix-ups. If b/d reversals dominate, spend a few days on only b in real books, then only d.</li><li>Read real books to her every day. The app builds the code; books build the reason to crack it.</li></ul></div>
+  </main>`;
+};
+
+/* ---------- 7. BOOT ---------- */
+function boot(){ applySettings(); view=P()?'home':'start'; render(); }
+if(window.claude&&window.claude.hot&&window.claude.hot.ready){ window.claude.hot.ready(()=>boot()); } else boot();
+</script>
