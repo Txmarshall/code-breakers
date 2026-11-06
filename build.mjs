@@ -35,8 +35,10 @@ if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){ addEven
 `;
 const html = head + frag + '\n</body>\n</html>\n';
 writeFileSync(new URL('./index.html', import.meta.url), html);
-// service worker: stamp the build hash so a new deploy installs a fresh cache and drops the old one
-const build = createHash('sha1').update(html).digest('hex').slice(0, 12);
+// service worker: stamp a hash of the whole app shell (page, manifest, icons) so any deploy installs a fresh cache and drops the old one
+const shell = ['./manifest.webmanifest', './sw.src.js', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
+const h = createHash('sha1').update(html); for (const f of shell) h.update(readFileSync(new URL(f, import.meta.url)));
+const build = h.digest('hex').slice(0, 12);
 writeFileSync(new URL('./sw.js', import.meta.url), readFileSync(new URL('./sw.src.js', import.meta.url), 'utf8').replaceAll('__BUILD__', build));
 must(['--check', here('./sw.js')], 'syntax check of sw.js');
 // syntax check the inline script
