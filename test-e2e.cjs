@@ -21,7 +21,7 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; this.rate = 1; this.pitch = 1; } };
     const S = window.speechSynthesis;
     if (S) {
-      S.speak = (u) => { window.__spoken.push({ t: u.text, rate: u.rate, pitch: u.pitch, at: performance.now() }); setTimeout(() => u.onend && u.onend(), 150); };
+      S.speak = (u) => { window.__spoken.push({ t: u.text, rate: u.rate, pitch: u.pitch, at: performance.now(), gen: window.__gen ? window.__gen() : -1 }); setTimeout(() => u.onend && u.onend(), 150); };
       S.cancel = () => {};
       S.getVoices = () => [{ name: 'Google US English', voiceURI: 'Google US English', lang: 'en-US' }];
     }
@@ -29,7 +29,7 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
   await page.goto(URL, { waitUntil: 'load' });
   await page.waitForTimeout(500);
   // wrap the synth after the script ran (function declaration = global binding)
-  await page.evaluate(() => { const o = synthPhoneme; synthPhoneme = (g) => { const r = o(g); window.__syn.push({ g, synth: !!r }); return r; }; });
+  await page.evaluate(() => { window.__gen = () => SPEECH_GEN; const o = synthPhoneme; synthPhoneme = (g) => { const r = o(g); window.__syn.push({ g, synth: !!r }); return r; }; });
   const spoken = async () => page.evaluate(() => window.__spoken.splice(0));
   const syn = async () => page.evaluate(() => window.__syn.splice(0));
 
@@ -59,7 +59,8 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     log(`item ${n}: ${it.t} g=${it.g} w=${it.w}`);
     await page.waitForTimeout(700); // let the item's auto-prompt fire (250ms timeout + speech)
     const auto = await spoken(); const autoSyn = await syn();
-    if (prevW && prevW !== it.w) expect(!auto.some(x => x.t.includes('The word is: ' + prevW)), `previous word "${prevW}" does not leak into this item's audio`);
+    const curGen = await page.evaluate(() => SPEECH_GEN);
+    if (prevW && prevW !== it.w) expect(!auto.some(x => x.gen === curGen && x.t.includes('The word is: ' + prevW)), `previous word "${prevW}" does not leak into this item's audio (after its render)`);
     if (it.t === 'build') {
       buildSeen++;
       const prompt = await page.textContent('#bprompt');
