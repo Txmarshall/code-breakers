@@ -68,6 +68,7 @@ button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;user-
 .btn.small{min-height:48px;font-size:1rem;padding:8px 16px;border-radius:12px}
 .btn.big{min-height:76px;font-size:1.35rem;width:100%}
 .btn:disabled{opacity:.45;cursor:default}
+.btn.secondary.good{background:var(--accent);color:var(--accent-ink);box-shadow:0 0 0 3px var(--warm)}
 .btn:focus-visible,.tile:focus-visible,.pick:focus-visible{outline:4px solid var(--warm);outline-offset:2px}
 .icon{font-size:1.4em;line-height:1}
 
@@ -467,7 +468,7 @@ function distractorsG(g, taught, n){
   const out=[]; const conf=(CONFUSE[g]||[]).filter(x=>taught.includes(x)&&x!==g);
   shuffle(conf).forEach(x=>{ if(out.length<n) out.push(x); });
   shuffle(taught.filter(x=>x!==g&&!out.includes(x))).forEach(x=>{ if(out.length<n) out.push(x); });
-  while(out.length<n){ const extra=['s','a','t','p','i','n','m','d'].find(x=>x!==g&&!out.includes(x)); if(!extra) break; out.push(extra); }
+  while(out.length<n){ const extra=['s','a','t','p','i','n','m','d'].find(x=>x!==g&&!out.includes(x)&&!taught.includes(x)); if(!extra) break; out.push(extra); }
   return out;
 }
 function distractorWords(p,word,n){
@@ -521,7 +522,7 @@ function itemHTML(it,p){
   if(it.t==='count') return `<div class="prompt">How many sounds do you hear?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div>'}<div class="picks">${[2,3,4,5].filter(n=>n<=Math.max(4,it.n)).map(n=>`<button class="pick" data-act="pickn" data-v="${n}"><span style="display:flex;gap:4px">${'▢'.repeat(n)}</span></button>`).join('')}</div>`;
   if(it.t==='find') return `<div class="prompt">Find the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="picks">${it.opts.map(w=>`<button class="pick letters" data-act="pickw" data-v="${w}">${esc(w)}</button>`).join('')}</div>`;
   if(it.t==='read'){ const toks=tokenize(it.w); return `<div class="prompt">Tap each sound, then blend</div><div class="tiles">${toks.map((t,i)=>`<button class="tile ${t.v?'vowel':''} ${t.silent?'silent':''}" data-act="snd" data-v="${t.g}" data-i="${i}">${esc(t.t)}</button>`).join('')}</div><div class="center"><button class="btn secondary" data-act="blend">Blend it ➜</button></div><div class="prompt">Which picture?</div><div class="picks">${it.opts.map(w=>`<button class="pick emoji" data-act="pickw" data-v="${w}">${PIC[w]}</button>`).join('')}</div>`; }
-  if(it.t==='build'){ const toks=tokenize(it.w); const need=toks.filter(t=>!t.silent); const bank=shuffle([...toks.map(t=>t.g), ...distractorsG(toks[rnd(toks.length)].g, taughtGraphemes(p), 2)]); cur.bank=bank; cur.need=toks;
+  if(it.t==='build'){ const toks=tokenize(it.w); const inWord=toks.map(t=>t.g); const pool=taughtGraphemes(p).filter(g=>!inWord.includes(g)); const bank=shuffle([...inWord, ...distractorsG(toks[rnd(toks.length)].g, pool.length?pool:['m','n'], 2)]); cur.bank=bank; cur.need=toks;
     return `<div class="prompt">Build the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="boxes" id="boxes">${toks.map((t,i)=>t.silent?`<div class="box outside" data-i="${i}"><span class="tile silent ghost" data-g="e">e</span></div>`:`<button class="box" data-act="unbox" data-i="${i}" aria-label="sound box ${i+1}"></button>`).join('')}</div><div class="tiles" id="bank">${bank.map((g,i)=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="bank" data-v="${g}" data-i="${i}">${esc(g.replace('_e',''))}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
   if(it.t==='switch'){ const toks=tokenize(it.w); cur.now=toks.map(t=>t.g); const target=tokenize(it.w2); const diffI=target.findIndex((x,i)=>x.t!==toks[i].t); cur.diffI=diffI; const bank=shuffle([target[diffI].g,...distractorsG(target[diffI].g,taughtGraphemes(p),2)]);
     return `<div class="prompt">Change one sound. Make it say…</div><div class="center">${hearBtn('hear2')}</div><div class="boxes" id="boxes">${toks.map((t,i)=>`<button class="box filled" data-act="swbox" data-i="${i}"><span class="tile ${t.v?'vowel':''}">${esc(t.t)}</span></button>`).join('')}</div><p class="center muted">Tap a box, then tap the new sound.</p><div class="tiles">${bank.map(g=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="swtile" data-v="${g}">${esc(g)}</button>`).join('')}</div>`; }
@@ -536,7 +537,7 @@ function itemHTML(it,p){
   return '';
 }
 function fb(msg, good){ const el=$('#fb'); if(!el) return; el.textContent=msg; el.style.color=good?'var(--accent)':'var(--muted)'; }
-function praise(){ return pick(['You cracked it.','Nice slow sounding-out.','That is the code.','Yes — you blended it.','You listened carefully.','Code cracked.','Careful work. Yes.']); }
+function praise(){ return pick(['You cracked it.','Nice careful listening.','That is the code.','Yes. You worked it out.','You listened carefully.','Code cracked.','Careful work. Yes.']); }
 function next(ok){
   const p=P(), s=session, it=cur.item;
   s.total++; if(ok) s.correct++;
