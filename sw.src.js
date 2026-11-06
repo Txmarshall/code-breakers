@@ -1,4 +1,4 @@
-// Service worker source. build.mjs stamps __BUILD__ with a hash of index.html and writes sw.js.
+// Service worker source. build.mjs replaces the BUILD placeholder with a hash of index.html and writes sw.js.
 // Strategy: precache the app shell; navigations are network-first (fresh build when online,
 // cached build when offline); everything else is cache-first. Old caches are dropped on activate.
 const BUILD = '__BUILD__';

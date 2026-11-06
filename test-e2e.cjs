@@ -174,6 +174,8 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     expect(icons.every(s => s === 200), `icons + sw.js reachable: ${icons.join(',')}`);
     const sw = await page.evaluate(() => navigator.serviceWorker.ready.then(r => ({ scope: r.scope, active: !!r.active, url: r.active && r.active.scriptURL })));
     expect(sw.active, `service worker active: ${JSON.stringify(sw)}`);
+    const cacheNames = await page.evaluate(() => caches.keys());
+    expect(cacheNames.some(k => /^code-breakers-[0-9a-f]{12}$/.test(k)), `SW cache is build-stamped: ${cacheNames.join(',')}`);
     // offline: a reload must still render the app from the SW cache
     await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(500); // ensure this load is SW-controlled
     await ctx.setOffline(true);

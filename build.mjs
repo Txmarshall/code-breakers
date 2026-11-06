@@ -37,7 +37,7 @@ const html = head + frag + '\n</body>\n</html>\n';
 writeFileSync(new URL('./index.html', import.meta.url), html);
 // service worker: stamp the build hash so a new deploy installs a fresh cache and drops the old one
 const build = createHash('sha1').update(html).digest('hex').slice(0, 12);
-writeFileSync(new URL('./sw.js', import.meta.url), readFileSync(new URL('./sw.src.js', import.meta.url), 'utf8').replace('__BUILD__', build));
+writeFileSync(new URL('./sw.js', import.meta.url), readFileSync(new URL('./sw.src.js', import.meta.url), 'utf8').replaceAll('__BUILD__', build));
 must(['--check', here('./sw.js')], 'syntax check of sw.js');
 // syntax check the inline script
 const m = frag.match(/<script>([\s\S]*)<\/script>/);
