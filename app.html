@@ -317,7 +317,7 @@ const SYN = {
   f:{noise:{type:'bandpass',f:4200,q:.4,g:.09}}, ff:'f', v:{noise:{type:'bandpass',f:4200,q:.4,g:.05},hum:{f:120,g:.07}}, th:{noise:{type:'bandpass',f:6000,q:.35,g:.06}},
   sh:{noise:{type:'bandpass',f:2800,q:1.4,g:.22}},
   m:{hum:{f:150,g:.12,lp:450}}, n:{hum:{f:150,g:.11,lp:700},form:[[1500,.5,8]]}, ng:{hum:{f:150,g:.11,lp:700},form:[[2100,.5,8]]},
-  a:{vowel:[669,2800,3100]}, i:{vowel:[483,2850,3200]}, /* a/i F2 set above target: the buzz source rolls off, measured F2 then lands on 2349/2365 */ e:{vowel:[731,2058,2979]}, o:{vowel:[936,1551,2815]}, u:{vowel:[753,1426,2933]}
+  a:{vowel:[669,2349,2972]}, i:{vowel:[483,2365,3053]}, e:{vowel:[731,2058,2979]}, o:{vowel:[936,1551,2815]}, u:{vowel:[753,1426,2933]}
 };
 function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=.55, t=c.currentTime;
   const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+.05); out.gain.setValueAtTime(1,t+dur-.12); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
