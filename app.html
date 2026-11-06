@@ -249,7 +249,7 @@ const LS = {
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem(k);}catch(e){} }
 };
-const DB = { profiles: LS.get('cb_profiles',[]), current: LS.get('cb_current',null), voice: LS.get('cb_voice',{}), settings: LS.get('cb_settings',{ls:0.08,font:'verdana',paper:'cream',theme:'auto',rate:0.85,voice:'',reveal:2}) };
+const DB = { profiles: LS.get('cb_profiles',[]), current: LS.get('cb_current',null), voice: LS.get('cb_voice',{}), settings: LS.get('cb_settings',{ls:0.08,font:'verdana',paper:'cream',theme:'auto',rate:0.8,voice:'',reveal:2}) };
 function saveAll(){ LS.set('cb_profiles',DB.profiles); LS.set('cb_current',DB.current); LS.set('cb_settings',DB.settings); }
 function saveVoice(){ LS.set('cb_voice',DB.voice); }
 function newProfile(name,band,skin){
@@ -520,7 +520,7 @@ S.play=function(){
   const head=`<header class="bar"><button class="btn ghost small" data-act="quit" aria-label="Stop">✕</button><div class="title">${sk.round} ${s.r+1} · Level ${p.level}</div><span class="chip">${sk.icon} ${p.coll.length}</span></header>`;
   return head+`<main class="stack">${prog}<div class="card stack" id="item">${itemHTML(item,p)}</div><div class="feedback" id="fb"></div></main>`;
 };
-S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g,{keyword:true}); else if(it.t==='build'){ const gen=SPEECH_GEN; sayWord(it.w,true).then(()=>{ const t=buildPrompt(); if(t&&gen===SPEECH_GEN) speak(t); }); } else if(it.t==='first'||it.t==='count'||it.t==='find') sayWord(it.w, it.t!=='find'); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
+S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g,{keyword:it.mode==='g2k'}); else if(it.t==='build'){ const gen=SPEECH_GEN; sayWord(it.w,true).then(()=>{ const t=buildPrompt(); if(t&&gen===SPEECH_GEN) speak(t); }); } else if(it.t==='first'||it.t==='count'||it.t==='find') sayWord(it.w, it.t!=='find'); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
 
 function itemHTML(it,p){
   const up=false;
@@ -588,7 +588,7 @@ app.addEventListener('click', async e=>{
   if(act==='play'){ session=buildSession(p); go('play'); return; }
   if(act==='placement'){ go('placement'); return; }
   if(act==='quit'){ endSession(false); go('home'); return; }
-  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g,{keyword:true}); else sayWord(it.w, it.t==='first'||it.t==='count'||it.t==='build'); return; }
+  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g,{keyword:it.mode==='g2k'}); else sayWord(it.w, it.t==='first'||it.t==='count'||it.t==='build'); return; }
   if(act==='hear2'){ sayWord(cur.item.w2); return; }
   if(cur&&cur.done) return;
   if(act==='pickg'){ const it=cur.item; const g=it.g; if(v===g){ b.classList.add('good'); onCorrect(g, it.t==='spy'&&it.mode==='g2k'?'sound':'decode', v); } else { b.classList.add('wobble'); onMiss(g,'decode',v,(n)=>{ if(n===1){ b.classList.add('dim'); if(it.t==='spy') sayPhoneme(g); else sayWord(it.w); } else { app.querySelectorAll('[data-act="pickg"]').forEach(x=>{ if(x.dataset.v===g) x.classList.add('good'); else x.classList.add('dim'); }); sayPhoneme(g).then(()=>sayKeyword(g)); } }); } return; }
@@ -642,7 +642,7 @@ function checkBuild(){
   const it=cur.item; const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const got=boxes.map(x=>x.dataset.g); const need=cur.need.filter(t=>!t.silent).map(t=>t.g);
   const ok=got.every((g,i)=>g===need[i]);
   const p=P();
-  if(ok){ boxes.forEach(x=>x.querySelector('.tile').classList.add('good')); if(it.t==='heart'){ p.heart[it.w]=(p.heart[it.w]||0)+1; saveAll(); sayWord(it.w); SFX.good(); fb(praise(),true); next(true); } else { sayWord(it.w); onCorrect(it.g,'encode',null); } return; }
+  if(ok){ boxes.forEach(x=>x.querySelector('.tile').classList.add('good')); if(it.t==='heart'){ p.heart[it.w]=(p.heart[it.w]||0)+1; saveAll(); sayWord(it.w); SFX.good(); fb(praise(),true); next(true); } else { sayWord(it.w,true); onCorrect(it.g,'encode',null); } return; }
   const wrongI=got.findIndex((g,i)=>g!==need[i]); const chosen=got[wrongI];
   boxes.forEach((x,i)=>{ if(got[i]!==need[i]) x.querySelector('.tile').classList.add('wobble'); });
   if(it.t==='heart'){ cur.miss++; SFX.again(); if(cur.miss===1){ fb('Almost. Fix the wobbly ones.'); boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; sayWord(it.w); } else { fb('Here it is.'); boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile good">${esc(need[i])}</span>`; }); next(false); } return; }
