@@ -333,7 +333,7 @@ function speak(text, opts){
   });
 }
 function playClip(dataUrl){ return new Promise(res=>{ try{ const a=new Audio(dataUrl); a.onended=res; a.onerror=res; a.play().catch(()=>res()); }catch(e){ res(); } }); }
-async function sayWord(w){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(w); }
+async function sayWord(w,carrier){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(carrier?'The word is: '+w+'.':w,{rate:.75}); }
 async function sayPhoneme(g){
   // Parent recording first (correct, clipped sounds). Otherwise TTS approximation for continuous sounds, keyword for stops.
   if(DB.voice['g:'+g]) return playClip(DB.voice['g:'+g]);
@@ -456,10 +456,11 @@ function targetGrapheme(p, opts){
   return weightedPick(prev, prev.map(g=>0.1+weakness(p,g)));
 }
 function weightedPick(items,w){ const sum=w.reduce((a,b)=>a+b,0); let r=Math.random()*sum; for(let i=0;i<items.length;i++){ r-=w[i]; if(r<=0) return items[i]; } return items[items.length-1]; }
-function wordWith(p,g,maxLen){
+function wordWith(p,g,maxLen,preferPic){
   const L=levelOf(p.level);
   let pool=wordsFor(p,p.level).filter(w=>g==='blend'?tokenize(w).filter(t=>!t.silent).length>=4:tokenize(w).some(t=>t.g===g));
   if(maxLen) pool=pool.filter(w=>tokenize(w).filter(t=>!t.silent).length<=maxLen);
+  if(preferPic){ const pics=pool.filter(w=>PIC[w]); if(pics.length) pool=pics; }
   const cur=levelWords(L).filter(w=>pool.includes(w));
   if(cur.length && Math.random()<0.6) return pick(cur);
   return pool.length?pick(pool):(levelWords(L)[0]||'sat');
@@ -484,8 +485,8 @@ function makeRound(p,types){
   const hearts=heartsFor(p);
   for(const t of types){
     if(t==='spy'){ const g=targetGrapheme(p); const mode=Math.random()<.5?'g2k':'k2g'; items.push({t,g,mode,opts:shuffle([g,...distractorsG(g,taught,2)])}); }
-    else if(t==='first'){ const g=targetGrapheme(p); const w=wordWith(p,g); const first=tokenize(w)[0].g; items.push({t,g:first,w,opts:shuffle([first,...distractorsG(first,taught,2)])}); }
-    else if(t==='count'){ const g=targetGrapheme(p); const w=wordWith(p,g,4); items.push({t,g,w,n:tokenize(w).filter(x=>!x.silent).length}); }
+    else if(t==='first'){ const g=targetGrapheme(p); const w=wordWith(p,g,0,true); const first=tokenize(w)[0].g; items.push({t,g:first,w,opts:shuffle([first,...distractorsG(first,taught,2)])}); }
+    else if(t==='count'){ const g=targetGrapheme(p); const w=wordWith(p,g,4,true); items.push({t,g,w,n:tokenize(w).filter(x=>!x.silent).length}); }
     else if(t==='find'){ const g=targetGrapheme(p,{pseudo:true}); const w=wordWith(p,g); items.push({t,g,w,opts:shuffle([w,...distractorWords(p,w,2)])}); }
     else if(t==='read'){ let g=targetGrapheme(p,{pseudo:true}); let w=wordWith(p,g); let tries=0; while(!PIC[w]&&tries++<12){ g=targetGrapheme(p,{pseudo:true}); w=wordWith(p,g); } if(!PIC[w]){ items.push({t:'find',g,w,opts:shuffle([w,...distractorWords(p,w,2)])}); continue; } const others=shuffle(Object.keys(PIC).filter(x=>x!==w&&PIC[x]!==PIC[w])).slice(0,2); items.push({t,g,w,opts:shuffle([w,...others])}); }
     else if(t==='build'){ const g=targetGrapheme(p,{pseudo:true}); const w=wordWith(p,g,L.id>=9?5:4); items.push({t,g,w}); }
@@ -518,8 +519,8 @@ function itemHTML(it,p){
     if(it.mode==='g2k') return `<div class="prompt">Which sound is this?</div><div class="center">${hearBtn('hear')}</div><div class="emoji-big">${G[it.g].e}</div><p class="center muted">${esc(G[it.g].k)}</p><div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g.replace('_e','-e'))}</button>`).join('')}</div>`;
     return `<div class="prompt">Which picture starts with this sound?</div><div class="center">${hearBtn('hear')}</div><div class="center"><span class="tile vowel" style="--tilepx:96px;${G[it.g].v?'':'border-color:var(--line)'}">${esc(it.g.replace('_e','-e'))}</span></div><div class="picks">${it.opts.map(g=>`<button class="pick emoji" data-act="pickg" data-v="${g}">${G[g].e}</button>`).join('')}</div>`;
   }
-  if(it.t==='first') return `<div class="prompt">What is the first sound in…</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div>'}<div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g)}</button>`).join('')}</div>`;
-  if(it.t==='count') return `<div class="prompt">How many sounds do you hear?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div>'}<div class="picks">${[2,3,4,5].filter(n=>n<=Math.max(4,it.n)).map(n=>`<button class="pick" data-act="pickn" data-v="${n}"><span style="display:flex;gap:4px">${'▢'.repeat(n)}</span></button>`).join('')}</div>`;
+  if(it.t==='first') return `<div class="prompt">What is the first sound in…</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<p class="center muted">No picture for this one. Tap 🔊 and listen.</p>'}<div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g)}</button>`).join('')}</div>`;
+  if(it.t==='count') return `<div class="prompt">How many sounds do you hear?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<p class="center muted">No picture for this one. Tap 🔊 and listen.</p>'}<div class="picks">${[2,3,4,5].filter(n=>n<=Math.max(4,it.n)).map(n=>`<button class="pick" data-act="pickn" data-v="${n}"><span style="display:flex;gap:4px">${'▢'.repeat(n)}</span></button>`).join('')}</div>`;
   if(it.t==='find') return `<div class="prompt">Find the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="picks">${it.opts.map(w=>`<button class="pick letters" data-act="pickw" data-v="${w}">${esc(w)}</button>`).join('')}</div>`;
   if(it.t==='read'){ const toks=tokenize(it.w); return `<div class="prompt">Tap each sound, then blend</div><div class="tiles">${toks.map((t,i)=>`<button class="tile ${t.v?'vowel':''} ${t.silent?'silent':''}" data-act="snd" data-v="${t.g}" data-i="${i}">${esc(t.t)}</button>`).join('')}</div><div class="center"><button class="btn secondary" data-act="blend">Blend it ➜</button></div><div class="prompt">Which picture?</div><div class="picks">${it.opts.map(w=>`<button class="pick emoji" data-act="pickw" data-v="${w}">${PIC[w]}</button>`).join('')}</div>`; }
   if(it.t==='build'){ const toks=tokenize(it.w); const inWord=toks.map(t=>t.g); const pool=taughtGraphemes(p).filter(g=>!inWord.includes(g)); const bank=shuffle([...inWord, ...distractorsG(toks[rnd(toks.length)].g, pool.length?pool:['m','n'], 2)]); cur.bank=bank; cur.need=toks;
@@ -570,7 +571,7 @@ app.addEventListener('click', async e=>{
   if(act==='play'){ session=buildSession(p); go('play'); return; }
   if(act==='placement'){ go('placement'); return; }
   if(act==='quit'){ endSession(false); go('home'); return; }
-  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g); else sayWord(it.w); return; }
+  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g); else sayWord(it.w, it.t==='first'||it.t==='count'); return; }
   if(act==='hear2'){ sayWord(cur.item.w2); return; }
   if(cur&&cur.done) return;
   if(act==='pickg'){ const it=cur.item; const g=it.g; if(v===g){ b.classList.add('good'); onCorrect(g, it.t==='spy'&&it.mode==='g2k'?'sound':'decode', v); } else { b.classList.add('wobble'); onMiss(g,'decode',v,(n)=>{ if(n===1){ b.classList.add('dim'); if(it.t==='spy') sayPhoneme(g); else sayWord(it.w); } else { app.querySelectorAll('[data-act="pickg"]').forEach(x=>{ if(x.dataset.v===g) x.classList.add('good'); else x.classList.add('dim'); }); sayPhoneme(g).then(()=>sayKeyword(g)); } }); } return; }
