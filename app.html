@@ -167,13 +167,13 @@ li{margin:4px 0}
 /* ---------- 1. DATA ---------- */
 // NOTE: lint.mjs extracts sections 1 and 3 by their dashed section-marker comments and runs them without a DOM.
 // Keep sections 1 and 3 free of browser globals; keep the marker spelling. test-lint.mjs guards this seam.
-// grapheme -> {k: keyword, e: emoji, say: TTS syllable for vowels only (consonant strings like 'sss' get SPELLED by TTS), v: vowel}
-// Continuous consonants are synthesized in SYN below; stops and approximants are silent until a parent records them.
+// grapheme -> {k: keyword, e: emoji, say: TTS text for long vowels/digraphs that TTS reads correctly (ay, ee, oh...), v: vowel}
+// Short vowels + continuous consonants are synthesized in SYN below (TTS spells 'sss' and cannot say a short a); stops and approximants are silent until a parent records them.
 const G = {
-  s:{k:'sun',e:'☀️'}, a:{k:'apple',e:'🍎',say:'ah',v:1}, t:{k:'tiger',e:'🐯'}, p:{k:'pig',e:'🐷'},
-  i:{k:'iguana',e:'🦎',say:'ih',v:1}, n:{k:'nut',e:'🥜'}, m:{k:'mouse',e:'🐭'}, d:{k:'dog',e:'🐶'},
-  g:{k:'goat',e:'🐐'}, o:{k:'octopus',e:'🐙',say:'aw',v:1}, c:{k:'cat',e:'🐱'}, k:{k:'key',e:'🔑'},
-  ck:{k:'duck',e:'🦆'}, e:{k:'egg',e:'🥚',say:'eh',v:1}, u:{k:'umbrella',e:'☂️',say:'uh',v:1}, r:{k:'rabbit',e:'🐰'},
+  s:{k:'sun',e:'☀️'}, a:{k:'apple',e:'🍎',v:1}, t:{k:'tiger',e:'🐯'}, p:{k:'pig',e:'🐷'},
+  i:{k:'iguana',e:'🦎',v:1}, n:{k:'nut',e:'🥜'}, m:{k:'mouse',e:'🐭'}, d:{k:'dog',e:'🐶'},
+  g:{k:'goat',e:'🐐'}, o:{k:'octopus',e:'🐙',v:1}, c:{k:'cat',e:'🐱'}, k:{k:'key',e:'🔑'},
+  ck:{k:'duck',e:'🦆'}, e:{k:'egg',e:'🥚',v:1}, u:{k:'umbrella',e:'☂️',v:1}, r:{k:'rabbit',e:'🐰'},
   h:{k:'hat',e:'🎩'}, b:{k:'bus',e:'🚌'}, f:{k:'fish',e:'🐟'}, l:{k:'lemon',e:'🍋'},
   ff:{k:'puff',e:'💨'}, ll:{k:'bell',e:'🔔'}, ss:{k:'dress',e:'👗'}, j:{k:'jet',e:'✈️'}, v:{k:'van',e:'🚐'}, w:{k:'web',e:'🕸️'},
   x:{k:'box',e:'📦'}, y:{k:'yarn',e:'🧶'}, z:{k:'zebra',e:'🦓'}, zz:{k:'fizz',e:'🥤'}, qu:{k:'queen',e:'👸'},
@@ -309,15 +309,24 @@ function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioCont
 function tone(freq,dur,type,gain,when){ const c=ac(); if(!c) return; const o=c.createOscillator(), g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq; g.gain.value=0; o.connect(g); g.connect(c.destination); const t=c.currentTime+(when||0); g.gain.linearRampToValueAtTime(gain||.15,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+dur); o.start(t); o.stop(t+dur+.05); }
 // Synthesized continuous consonants. speechSynthesis spells 'sss' as letter names, so hiss/hum them with WebAudio instead.
 let NOISE=null; function noiseBuf(c){ if(!NOISE){ const n=c.sampleRate; NOISE=c.createBuffer(1,n,c.sampleRate); const d=NOISE.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1; } return NOISE; }
+// Levels: vowels loudest, nasals next, fricatives ~8-10 dB under the vowels (speech-like); measured offline 2026-11-06.
+// noise: filtered hiss. hum: voiced murmur. vowel: glottal buzz through F1/F2/F3 resonators (Hillenbrand 1995 adult-female targets).
+// Short vowels are synthesized because no TTS spelling yields them: on Google TTS 'a' is the letter name, 'ah' is the octopus vowel, 'ih'/'eh' come out as eye/ee (measured 2026-11-06).
 const SYN = {
-  s:{noise:{type:'highpass',f:5500,q:.7,g:.22}}, ss:'s', z:{noise:{type:'highpass',f:5500,q:.7,g:.12},hum:{f:120,g:.08}}, zz:'z',
-  f:{noise:{type:'bandpass',f:3500,q:.5,g:.16}}, ff:'f', v:{noise:{type:'bandpass',f:3500,q:.5,g:.08},hum:{f:120,g:.1}}, th:{noise:{type:'bandpass',f:5200,q:.4,g:.1}},
-  sh:{noise:{type:'bandpass',f:2600,q:1.2,g:.28}}, m:{hum:{f:150,g:.18,lp:500}}, n:{hum:{f:150,g:.16,lp:900}}, ng:{hum:{f:150,g:.16,lp:1400}}
+  s:{noise:{type:'bandpass',f:7200,q:.9,g:.14}}, ss:'s', z:{noise:{type:'bandpass',f:7200,q:.9,g:.09},hum:{f:120,g:.07}}, zz:'z',
+  f:{noise:{type:'bandpass',f:4200,q:.4,g:.09}}, ff:'f', v:{noise:{type:'bandpass',f:4200,q:.4,g:.05},hum:{f:120,g:.07}}, th:{noise:{type:'bandpass',f:6000,q:.35,g:.06}},
+  sh:{noise:{type:'bandpass',f:2800,q:1.4,g:.22}},
+  m:{hum:{f:150,g:.12,lp:450}}, n:{hum:{f:150,g:.11,lp:700},form:[[1500,.5,8]]}, ng:{hum:{f:150,g:.11,lp:700},form:[[2100,.5,8]]},
+  a:{vowel:[669,2800,3100]}, i:{vowel:[483,2850,3200]}, /* a/i F2 set above target: the buzz source rolls off, measured F2 then lands on 2349/2365 */ e:{vowel:[731,2058,2979]}, o:{vowel:[936,1551,2815]}, u:{vowel:[753,1426,2933]}
 };
-function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=.5, t=c.currentTime;
-  const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+.06); out.gain.setValueAtTime(1,t+dur-.1); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
+function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=.55, t=c.currentTime;
+  const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+.05); out.gain.setValueAtTime(1,t+dur-.12); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
   if(d.noise){ const src=c.createBufferSource(); src.buffer=noiseBuf(c); src.loop=true; const flt=c.createBiquadFilter(); flt.type=d.noise.type; flt.frequency.value=d.noise.f; flt.Q.value=d.noise.q; const gn=c.createGain(); gn.gain.value=d.noise.g; src.connect(flt); flt.connect(gn); gn.connect(out); src.start(t); src.stop(t+dur); }
-  if(d.hum){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=d.hum.f; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=d.hum.lp||400; const gn=c.createGain(); gn.gain.value=d.hum.g; o.connect(lp); lp.connect(gn); gn.connect(out); o.start(t); o.stop(t+dur); }
+  if(d.hum){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=d.hum.f; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=d.hum.lp||400; const gn=c.createGain(); gn.gain.value=d.hum.g; o.connect(lp); lp.connect(gn); gn.connect(out);
+    (d.form||[]).forEach(([f,g,q])=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q; const fg=c.createGain(); fg.gain.value=g*d.hum.g; o.connect(bp); bp.connect(fg); fg.connect(out); }); o.start(t); o.stop(t+dur); }
+  if(d.vowel){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(150,t); o.frequency.linearRampToValueAtTime(140,t+dur); // slight fall = natural
+    const bw=[90,160,220], gs=[.8,1.6,.8]; d.vowel.forEach((f,i)=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=f/bw[i]; const g2=c.createGain(); g2.gain.value=gs[i]*.9; o.connect(bp); bp.connect(g2); g2.connect(out); });
+    o.start(t); o.stop(t+dur); }
   return new Promise(r=>setTimeout(r,dur*1000)); }
 const SFX = {
   good(){ tone(523,.18,'sine',.12); tone(784,.28,'sine',.12,.12); },
