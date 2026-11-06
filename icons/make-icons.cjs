@@ -3,24 +3,25 @@
 const { chromium } = require('C:/Projects/iqc-dashboard/node_modules/playwright');
 const fs = require('fs');
 const F = 'font-family="Verdana,DejaVu Sans,Arial,sans-serif" font-weight="700"';
-const letters = ['s','a','t','p','i','n','m','d','g','o','c','k'];
-const dial = letters.map((l,i)=>{ const a=i/letters.length*Math.PI*2-Math.PI/2; const r=150; const x=256+Math.cos(a)*r, y=256+Math.sin(a)*r; return `<text x="${x.toFixed(1)}" y="${(y+16).toFixed(1)}" text-anchor="middle" ${F} font-size="46" fill="${i===1?'#FFE38A':'#D6DFFA'}">${l}</text>`; }).join('');
-const body = (bleed) => `<rect width="512" height="512" rx="${bleed?0:112}" fill="url(#bg)"/>
-<g transform="${bleed?'translate(256 256) scale(.82) translate(-256 -256)':''}">
-<circle cx="256" cy="256" r="200" fill="#15204A" stroke="#33448A" stroke-width="6"/>
-<circle cx="256" cy="256" r="200" fill="none" stroke="#D6DFFA" stroke-width="4" stroke-dasharray="4 28" opacity=".45"/>
-${dial}
-<circle cx="256" cy="256" r="106" fill="url(#gold)" filter="url(#sh)"/>
-<circle cx="256" cy="256" r="84" fill="#1B2550"/>
-<text x="256" y="294" text-anchor="middle" ${F} font-size="108" fill="#FFE38A">a</text>
-<polygon points="256,50 238,94 274,94" fill="#FF5A7A"/>
+// Icon: an open gold padlock whose body is a two-wheel code window. The first wheel has landed on
+// a lit "a" (cracked); the other still shows cipher marks (# ?). One object, one idea: crack the code.
+const body = (bleed) => `<rect width="512" height="512" rx="${bleed?0:112}" fill="url(#navy)"/>
+<g transform="${bleed?'translate(256 256) scale(.8) translate(-256 -256)':''}">
+<g filter="url(#sh)">
+<path d="M196 230 v-68 a84 84 0 0 1 168 0 v10" fill="none" stroke="url(#gold)" stroke-width="34" stroke-linecap="round" transform="rotate(-14 364 172)"/>
+<rect x="84" y="222" width="344" height="230" rx="46" fill="url(#gold)"/>
+</g>
+<rect x="118" y="256" width="118" height="162" rx="22" fill="#101A45" opacity=".85"/>
+<g ${F} font-size="72" fill="#8FA2FF" text-anchor="middle"><text x="177" y="328" opacity=".55">#</text><text x="177" y="404">?</text></g>
+<rect x="254" y="256" width="142" height="162" rx="22" fill="#101A45"/>
+<text x="325" y="398" text-anchor="middle" ${F} font-size="140" fill="#FFE38A">a</text>
 </g>`;
 const svg = (bleed) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-<!-- Code Breakers app icon: a vault dial whose combination is the first sounds (s a t p i n ...). Source for icons/*.png; regenerate with the script noted in README/memory. -->
+<!-- Code Breakers app icon: open padlock, two-wheel code window, first wheel cracked to "a". Source for icons/*.png. -->
 <defs>
-<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E2A5A"/><stop offset="1" stop-color="#0B1230"/></linearGradient>
-<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE38A"/><stop offset="1" stop-color="#E09B1A"/></linearGradient>
-<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity=".35"/></filter>
+<linearGradient id="navy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A3F92"/><stop offset="1" stop-color="#101A45"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE38A"/><stop offset="1" stop-color="#F0A822"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".3"/></filter>
 </defs>
 ${body(bleed)}</svg>`;
 (async () => {
