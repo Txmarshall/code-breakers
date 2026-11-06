@@ -15,4 +15,4 @@ jobs:
       - name: Lint mutation tests
         run: node test-lint.mjs
       - name: Committed index.html matches the source
-        run: git diff --exit-code -- index.html
+        run: git diff --exit-code -- index.html sw.js

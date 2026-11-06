@@ -164,6 +164,29 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
   const u = await page.evaluate(() => { window.__spoken.length = 0; speak('hi'); return window.__spoken[0]; });
   expect(u && u.pitch === 1.25 && u.rate === 0.8, `voice defaults pitch=${u && u.pitch} rate=${u && u.rate}`);
 
+  // PWA: manifest linked and reachable; SW registered and controlling on http(s); install card in Grown-ups
+  const manifestHref = await page.evaluate(() => { const l = document.querySelector('link[rel="manifest"]'); return l ? l.href : null; });
+  expect(!!manifestHref, `manifest linked (${manifestHref})`);
+  if (/^https?:/.test(URL)) {
+    const man = await page.evaluate(async (h) => { const r = await fetch(h); const j = await r.json(); return { ok: r.ok, name: j.name, display: j.display, icons: (j.icons || []).length, start: j.start_url }; }, manifestHref);
+    expect(man.ok && man.display === 'standalone' && man.icons >= 3, `manifest ok: ${JSON.stringify(man)}`);
+    const icons = await page.evaluate(async () => { const rs = await Promise.all(['icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'sw.js'].map(u => fetch(u).then(r => r.status))); return rs; });
+    expect(icons.every(s => s === 200), `icons + sw.js reachable: ${icons.join(',')}`);
+    const sw = await page.evaluate(() => navigator.serviceWorker.ready.then(r => ({ scope: r.scope, active: !!r.active, url: r.active && r.active.scriptURL })));
+    expect(sw.active, `service worker active: ${JSON.stringify(sw)}`);
+    // offline: a reload must still render the app from the SW cache
+    await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(500); // ensure this load is SW-controlled
+    await ctx.setOffline(true);
+    let offlineOk = false;
+    try { await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(500); offlineOk = await page.evaluate(() => typeof synthPhoneme === 'function' && !!document.querySelector('.bar')); } catch (e) { log('   offline reload threw', String(e).slice(0, 120)); }
+    await ctx.setOffline(false);
+    expect(offlineOk, 'app loads offline from the service worker cache');
+    await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(500);
+  }
+  await page.evaluate(() => { view = 'grown'; render(); });
+  const card = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find(x => x.textContent === 'On the home screen'); return h ? h.parentElement.textContent.slice(0, 80) : null; });
+  expect(!!card, `install card present in Grown-ups: ${card}`);
+
   expect(errors.length === 0, `no page errors: ${JSON.stringify(errors)}`);
   await browser.close();
   log(`\nRESULT: ${fails.length ? 'FAIL ' + fails.length : 'ALL PASS'}`);

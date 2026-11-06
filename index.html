@@ -6,8 +6,17 @@
 <meta name="theme-color" content="#FBF5E6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%90%3C/text%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Code Breakers">
+<meta name="application-name" content="Code Breakers">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <style>img{max-width:100%}[hidden]{display:none!important}</style>
+<script>
+// PWA: register the service worker on http(s) only (file:// and the artifact viewer have no SW).
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){ addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+</script>
 </head>
 <body>
 <title>Code Breakers</title>
@@ -262,6 +271,7 @@ const LS = {
   del(k){ try{ localStorage.removeItem(k);}catch(e){} }
 };
 const DB = { profiles: LS.get('cb_profiles',[]), current: LS.get('cb_current',null), voice: LS.get('cb_voice',{}), settings: LS.get('cb_settings',{ls:0.08,font:'verdana',paper:'cream',theme:'auto',rate:0.8,voice:'',reveal:2}) };
+let INSTALL=null; addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); INSTALL=e; if(view==='grown') render(); }); addEventListener('appinstalled',()=>{ INSTALL=null; toast('Code Breakers is on the home screen'); if(view==='grown') render(); });
 function saveAll(){ LS.set('cb_profiles',DB.profiles); LS.set('cb_current',DB.current); LS.set('cb_settings',DB.settings); }
 function saveVoice(){ LS.set('cb_voice',DB.voice); }
 function newProfile(name,band,skin){
@@ -636,6 +646,7 @@ app.addEventListener('click', async e=>{
   if(act==='gateok'){ const a=+($('#gatea').value||0); if(a===S.gate.ans){ go('grown'); } else { toast('Not quite — try again'); S.gate.n=null; render(); } return; }
   if(act==='set'){ const k=b.dataset.k; DB.settings[k]=v; saveAll(); render(); return; }
   if(act==='setvoice'){ DB.settings.voice=$('#voicesel').value; saveAll(); speak('Hello, I am your reading voice.'); return; }
+  if(act==='install'){ if(INSTALL){ const p=INSTALL; INSTALL=null; p.prompt(); try{ await p.userChoice; }catch(e){} render(); } return; }
   if(act==='setreveal'){ DB.settings.reveal=+$('#revealsel').value||2; saveAll(); toast('Saved'); return; }
   if(act==='testvoice'){ speak('The cat sat on the mat.'); return; }
   if(act==='rec'){ S.grown.recOpen=true; recordClip(b.dataset.k, b); return; }
@@ -734,6 +745,13 @@ S.gate=function(){ if(!S.gate.n){ const a=3+rnd(7), b=4+rnd(6); S.gate.n=[a,b]; 
   return bar('Grown-ups')+`<main class="stack"><div class="card stack"><h2>Quick check for grown-ups</h2><p class="muted">What is ${a} × ${b}?</p><input type="text" id="gatea" inputmode="numeric" autocomplete="off" aria-label="answer"><button class="btn" data-act="gateok">Enter</button></div></main>`; };
 S.gate.after=function(){ const i=$('#gatea'); i.focus(); i.addEventListener('keydown',e=>{ if(e.key==='Enter') app.querySelector('[data-act="gateok"]').click(); }); };
 
+function installCard(){
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(standalone) return `<p class="cite">Installed. Opens full-screen from its own icon, and works without Wi-Fi once it has loaded once.</p>`;
+  if(INSTALL) return `<div class="row"><button class="btn secondary" data-act="install">Add to home screen</button><span class="muted" style="font-size:.9rem">Puts an icon on the tablet or phone. Opens full-screen, works offline.</span></div>`;
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  return `<p class="cite">${ios?'In Safari, tap the Share button, then "Add to Home Screen".':'In Chrome, open the ⋮ menu and tap "Add to Home screen" (or "Install app").'} It then opens full-screen from its own icon and works without Wi-Fi.</p>`;
+}
 S.grown=function(){
   const s=DB.settings; const canRec=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
   const profiles=DB.profiles.map(p=>{
@@ -763,6 +781,9 @@ S.grown=function(){
     <div class="card stack"><h2>Play</h2>
       <div class="row"><label class="field grow">Show the answer after <select id="revealsel"><option value="2" ${(+s.reveal||2)===2?'selected':''}>2 misses</option><option value="3" ${(+s.reveal||2)===3?'selected':''}>3 misses</option></select></label><button class="btn small secondary" data-act="setreveal">Apply</button></div>
       <p class="cite">After the reveal, she taps the glowing answer, and the item comes back later in the round.</p>
+    </div>
+    <div class="card stack"><h2>On the home screen</h2>
+      ${installCard()}
     </div>
     <div class="card stack"><h2>Look</h2>
       <label class="field">Letter spacing <input type="range" id="ls" min="0" max="0.25" step="0.01" value="${s.ls}"></label>
