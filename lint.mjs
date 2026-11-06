@@ -31,7 +31,8 @@ for (const [g,d] of Object.entries(G)) {
   const FINAL = new Set(['ck','ff','ll','ss','zz','x','ng']); // only ever heard at the end of a word
   const ok = d.v ? toks.includes(g) : FINAL.has(g) ? toks[toks.length-1]===g : toks[0]===g;
   if (!ok) err(`G.${g}: keyword "${d.k}" does not ${d.v?'contain':FINAL.has(g)?'end with':'start with'} /${g}/ (tokens: ${toks.join(' ')})`);
-  if (!d.v && d.say===undefined && !/^[bcdgjkpqtx]|^ck$|^ch$|^qu$/.test(g)) warn(`G.${g}: consonant with no "say" value (will fall back to keyword on TTS)`);
+  // consonants: continuous ones are synthesized in SYN (app.html), stops/approximants are silent until recorded; a say string here would be SPELLED by TTS
+  if (!d.v && d.say!==undefined) warn(`G.${g}: consonant has a "say" string - TTS spells consonant strings as letter names; use SYN or leave silent`);
 }
 // 2. No two graphemes share a picture or a keyword (Sound Spy shows 3 pictures side by side).
 const byPic={}, byKw={};

@@ -167,16 +167,17 @@ li{margin:4px 0}
 /* ---------- 1. DATA ---------- */
 // NOTE: lint.mjs extracts sections 1 and 3 by their dashed section-marker comments and runs them without a DOM.
 // Keep sections 1 and 3 free of browser globals; keep the marker spelling. test-lint.mjs guards this seam.
-// grapheme -> {k: keyword, e: emoji, say: TTS approximation for continuous sounds (null = stop sound), v: vowel}
+// grapheme -> {k: keyword, e: emoji, say: TTS syllable for vowels only (consonant strings like 'sss' get SPELLED by TTS), v: vowel}
+// Continuous consonants are synthesized in SYN below; stops and approximants are silent until a parent records them.
 const G = {
-  s:{k:'sun',e:'☀️',say:'sss'}, a:{k:'apple',e:'🍎',say:'a',v:1}, t:{k:'tiger',e:'🐯'}, p:{k:'pig',e:'🐷'},
-  i:{k:'iguana',e:'🦎',say:'i',v:1}, n:{k:'nut',e:'🥜',say:'nnn'}, m:{k:'mouse',e:'🐭',say:'mmm'}, d:{k:'dog',e:'🐶'},
-  g:{k:'goat',e:'🐐'}, o:{k:'octopus',e:'🐙',say:'o',v:1}, c:{k:'cat',e:'🐱'}, k:{k:'key',e:'🔑'},
-  ck:{k:'duck',e:'🦆'}, e:{k:'egg',e:'🥚',say:'e',v:1}, u:{k:'umbrella',e:'☂️',say:'u',v:1}, r:{k:'rabbit',e:'🐰',say:'rrr'},
-  h:{k:'hat',e:'🎩'}, b:{k:'bus',e:'🚌'}, f:{k:'fish',e:'🐟',say:'fff'}, l:{k:'lemon',e:'🍋',say:'lll'},
-  ff:{k:'puff',e:'💨',say:'fff'}, ll:{k:'bell',e:'🔔',say:'lll'}, ss:{k:'dress',e:'👗',say:'sss'}, j:{k:'jet',e:'✈️'}, v:{k:'van',e:'🚐',say:'vvv'}, w:{k:'web',e:'🕸️',say:'w'},
-  x:{k:'box',e:'📦'}, y:{k:'yarn',e:'🧶',say:'y'}, z:{k:'zebra',e:'🦓',say:'zzz'}, zz:{k:'fizz',e:'🥤',say:'zzz'}, qu:{k:'queen',e:'👸'},
-  sh:{k:'sheep',e:'🐑',say:'shh'}, ch:{k:'chick',e:'🐥'}, th:{k:'thumb',e:'👍',say:'th'}, ng:{k:'ring',e:'💍',say:'ng'},
+  s:{k:'sun',e:'☀️'}, a:{k:'apple',e:'🍎',say:'ah',v:1}, t:{k:'tiger',e:'🐯'}, p:{k:'pig',e:'🐷'},
+  i:{k:'iguana',e:'🦎',say:'ih',v:1}, n:{k:'nut',e:'🥜'}, m:{k:'mouse',e:'🐭'}, d:{k:'dog',e:'🐶'},
+  g:{k:'goat',e:'🐐'}, o:{k:'octopus',e:'🐙',say:'aw',v:1}, c:{k:'cat',e:'🐱'}, k:{k:'key',e:'🔑'},
+  ck:{k:'duck',e:'🦆'}, e:{k:'egg',e:'🥚',say:'eh',v:1}, u:{k:'umbrella',e:'☂️',say:'uh',v:1}, r:{k:'rabbit',e:'🐰'},
+  h:{k:'hat',e:'🎩'}, b:{k:'bus',e:'🚌'}, f:{k:'fish',e:'🐟'}, l:{k:'lemon',e:'🍋'},
+  ff:{k:'puff',e:'💨'}, ll:{k:'bell',e:'🔔'}, ss:{k:'dress',e:'👗'}, j:{k:'jet',e:'✈️'}, v:{k:'van',e:'🚐'}, w:{k:'web',e:'🕸️'},
+  x:{k:'box',e:'📦'}, y:{k:'yarn',e:'🧶'}, z:{k:'zebra',e:'🦓'}, zz:{k:'fizz',e:'🥤'}, qu:{k:'queen',e:'👸'},
+  sh:{k:'sheep',e:'🐑'}, ch:{k:'chick',e:'🐥'}, th:{k:'thumb',e:'👍'}, ng:{k:'ring',e:'💍'},
   a_e:{k:'cake',e:'🎂',say:'ay',v:1}, i_e:{k:'bike',e:'🚲',say:'eye',v:1}, o_e:{k:'bone',e:'🦴',say:'oh',v:1}, u_e:{k:'cube',e:'🧊',say:'you',v:1},
   ai:{k:'rain',e:'🌧️',say:'ay',v:1}, ay:{k:'hay',e:'🌾',say:'ay',v:1}, ee:{k:'bee',e:'🐝',say:'ee',v:1}, ea:{k:'leaf',e:'🍃',say:'ee',v:1},
   oa:{k:'boat',e:'⛵',say:'oh',v:1}, ow:{k:'snow',e:'❄️',say:'oh',v:1}, igh:{k:'night',e:'🌃',say:'eye',v:1},
@@ -306,6 +307,18 @@ function heartsFor(p){ const h=[]; LEVELS.filter(l=>l.id<=p.level).forEach(l=>h.
 let AC=null;
 function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
 function tone(freq,dur,type,gain,when){ const c=ac(); if(!c) return; const o=c.createOscillator(), g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq; g.gain.value=0; o.connect(g); g.connect(c.destination); const t=c.currentTime+(when||0); g.gain.linearRampToValueAtTime(gain||.15,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+dur); o.start(t); o.stop(t+dur+.05); }
+// Synthesized continuous consonants. speechSynthesis spells 'sss' as letter names, so hiss/hum them with WebAudio instead.
+let NOISE=null; function noiseBuf(c){ if(!NOISE){ const n=c.sampleRate; NOISE=c.createBuffer(1,n,c.sampleRate); const d=NOISE.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1; } return NOISE; }
+const SYN = {
+  s:{noise:{type:'highpass',f:5500,q:.7,g:.22}}, ss:'s', z:{noise:{type:'highpass',f:5500,q:.7,g:.12},hum:{f:120,g:.08}}, zz:'z',
+  f:{noise:{type:'bandpass',f:3500,q:.5,g:.16}}, ff:'f', v:{noise:{type:'bandpass',f:3500,q:.5,g:.08},hum:{f:120,g:.1}}, th:{noise:{type:'bandpass',f:5200,q:.4,g:.1}},
+  sh:{noise:{type:'bandpass',f:2600,q:1.2,g:.28}}, m:{hum:{f:150,g:.18,lp:500}}, n:{hum:{f:150,g:.16,lp:900}}, ng:{hum:{f:150,g:.16,lp:1400}}
+};
+function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=.5, t=c.currentTime;
+  const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+.06); out.gain.setValueAtTime(1,t+dur-.1); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
+  if(d.noise){ const src=c.createBufferSource(); src.buffer=noiseBuf(c); src.loop=true; const flt=c.createBiquadFilter(); flt.type=d.noise.type; flt.frequency.value=d.noise.f; flt.Q.value=d.noise.q; const gn=c.createGain(); gn.gain.value=d.noise.g; src.connect(flt); flt.connect(gn); gn.connect(out); src.start(t); src.stop(t+dur); }
+  if(d.hum){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=d.hum.f; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=d.hum.lp||400; const gn=c.createGain(); gn.gain.value=d.hum.g; o.connect(lp); lp.connect(gn); gn.connect(out); o.start(t); o.stop(t+dur); }
+  return new Promise(r=>setTimeout(r,dur*1000)); }
 const SFX = {
   good(){ tone(523,.18,'sine',.12); tone(784,.28,'sine',.12,.12); },
   again(){ tone(330,.25,'triangle',.08); },
@@ -319,19 +332,22 @@ function speak(text, opts){
   opts=opts||{};
   return new Promise(res=>{
     if(!('speechSynthesis' in window)){ res(); return; }
-    try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=opts.rate||DB.settings.rate||.85; u.pitch=opts.pitch||1.05; u.lang='en-US';
-      const v=VOICES.find(v=>v.name===DB.settings.voice)||VOICES.find(v=>/Samantha|Aria|Jenny|Zira|Google US English|Karen|Moira/i.test(v.name))||VOICES.find(v=>/en-US/i.test(v.lang))||VOICES[0];
+    try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.rate=opts.rate||DB.settings.rate||.8; u.pitch=opts.pitch||1.25; u.lang='en-US';
+      const v=VOICES.find(v=>v.name===DB.settings.voice)||VOICES.find(v=>/Samantha|Ava|Allison|Susan|Aria|Jenny|Michelle|Zira|Karen|Moira|Google US English|en-us-x-tpf|en-us-x-sfg/i.test(v.name+' '+v.voiceURI))||VOICES.find(v=>/en-US/i.test(v.lang))||VOICES[0];
       if(v) u.voice=v; u.onend=()=>res(); u.onerror=()=>res(); speechSynthesis.speak(u); setTimeout(res, 4000); }catch(e){ res(); }
   });
 }
 function playClip(dataUrl){ return new Promise(res=>{ try{ const a=new Audio(dataUrl); a.onended=res; a.onerror=res; a.play().catch(()=>res()); }catch(e){ res(); } }); }
-async function sayWord(w,carrier){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(carrier?'The word is: '+w+'.':w,{rate:.75}); }
-async function sayPhoneme(g){
-  // Parent recording first (correct, clipped sounds). Otherwise TTS approximation for continuous sounds, keyword for stops.
+async function sayWord(w,carrier){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(carrier?'The word is: '+w+'. '+w+'.':w,{rate:.75}); }
+async function sayPhoneme(g, opts){
+  // Parent recording first (correct, clipped sounds). Otherwise TTS approximation for continuous sounds.
+  // A stop sound with no recording is SILENT unless opts.keyword (the I-Spy prompt) - speaking 'tiger' on a tile tap
+  // mid-word made a learner think the word was 'tiger'.
   if(DB.voice['g:'+g]) return playClip(DB.voice['g:'+g]);
+  const sy=synthPhoneme(g); if(sy) return sy;
   const d=G[g]||{};
   if(d.say) await speak(d.say,{rate:.7});
-  else if(d.k) await speak(d.k.split(' ')[0],{rate:.8});
+  else if(d.k && opts && opts.keyword) await speak(d.k.split(' ')[0],{rate:.8});
 }
 async function sayKeyword(g){ const d=G[g]; if(!d) return; if(DB.voice['k:'+g]) return playClip(DB.voice['k:'+g]); return speak(d.k); }
 
@@ -360,7 +376,8 @@ function confetti(){ if(matchMedia('(prefers-reduced-motion:reduce)').matches) r
 const S = {};
 let view='home', session=null, breakTimer=null, animId=null;
 function go(v,arg){ cleanupBreak(); if(v!=='play') cur=null; view=v; render(arg); window.scrollTo(0,0); }
-function render(arg){ applySettings(); const fn=S[view]||S.home; app.innerHTML=fn(arg)||''; if(fn.after) fn.after(arg); }
+let SPEECH_GEN=0;
+function render(arg){ applySettings(); SPEECH_GEN++; if('speechSynthesis' in window) speechSynthesis.cancel(); const fn=S[view]||S.home; app.innerHTML=fn(arg)||''; if(fn.after) fn.after(arg); }
 
 /* --- home / profiles --- */
 S.start=function(){
@@ -457,11 +474,11 @@ function wordWith(p,g,maxLen,preferPic){
   if(cur.length && Math.random()<0.6) return pick(cur);
   return pool.length?pick(pool):(levelWords(L)[0]||'sat');
 }
-function distractorsG(g, taught, n){
-  const out=[]; const conf=(CONFUSE[g]||[]).filter(x=>taught.includes(x)&&x!==g);
+function distractorsG(g, taught, n, avoid){
+  avoid=avoid||[]; const out=[]; const conf=(CONFUSE[g]||[]).filter(x=>taught.includes(x)&&x!==g);
   shuffle(conf).forEach(x=>{ if(out.length<n) out.push(x); });
   shuffle(taught.filter(x=>x!==g&&!out.includes(x))).forEach(x=>{ if(out.length<n) out.push(x); });
-  while(out.length<n){ const extra=['s','a','t','p','i','n','m','d'].find(x=>x!==g&&!out.includes(x)&&!taught.includes(x)); if(!extra) break; out.push(extra); }
+  while(out.length<n){ const extra=['s','a','t','p','i','n','m','d'].find(x=>x!==g&&!out.includes(x)&&!taught.includes(x)&&!avoid.includes(x)); if(!extra) break; out.push(extra); }
   return out;
 }
 function distractorWords(p,word,n){
@@ -503,7 +520,7 @@ S.play=function(){
   const head=`<header class="bar"><button class="btn ghost small" data-act="quit" aria-label="Stop">✕</button><div class="title">${sk.round} ${s.r+1} · Level ${p.level}</div><span class="chip">${sk.icon} ${p.coll.length}</span></header>`;
   return head+`<main class="stack">${prog}<div class="card stack" id="item">${itemHTML(item,p)}</div><div class="feedback" id="fb"></div></main>`;
 };
-S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g); else if(it.t==='first'||it.t==='count'||it.t==='find'||it.t==='build') sayWord(it.w); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
+S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g,{keyword:true}); else if(it.t==='build'){ const gen=SPEECH_GEN; sayWord(it.w,true).then(()=>{ const t=buildPrompt(); if(t&&gen===SPEECH_GEN) speak(t); }); } else if(it.t==='first'||it.t==='count'||it.t==='find') sayWord(it.w, it.t!=='find'); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
 
 function itemHTML(it,p){
   const up=false;
@@ -515,8 +532,8 @@ function itemHTML(it,p){
   if(it.t==='count') return `<div class="prompt">How many sounds do you hear?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div><p class="center muted" style="margin-top:-6px;font-weight:600">Listen carefully</p>'}<div class="picks">${[2,3,4,5].filter(n=>n<=Math.max(4,it.n)).map(n=>`<button class="pick" data-act="pickn" data-v="${n}" style="font-size:2.4rem;font-weight:700">${n}</button>`).join('')}</div>`;
   if(it.t==='find') return `<div class="prompt">Find the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="picks">${it.opts.map(w=>`<button class="pick letters" data-act="pickw" data-v="${w}">${esc(w)}</button>`).join('')}</div>`;
   if(it.t==='read'){ const toks=tokenize(it.w); return `<div class="prompt">Tap each sound, then blend</div><div class="tiles">${toks.map((t,i)=>`<button class="tile ${t.v?'vowel':''} ${t.silent?'silent':''}" data-act="snd" data-v="${t.g}" data-i="${i}">${esc(t.t)}</button>`).join('')}</div><div class="center"><button class="btn secondary" data-act="blend">Blend it ➜</button></div><div class="prompt">Which picture?</div><div class="picks">${it.opts.map(w=>`<button class="pick emoji" data-act="pickw" data-v="${w}">${PIC[w]}</button>`).join('')}</div>`; }
-  if(it.t==='build'){ const toks=tokenize(it.w); const inWord=toks.map(t=>t.g); const pool=taughtGraphemes(p).filter(g=>!inWord.includes(g)); const bank=shuffle([...inWord, ...distractorsG(toks[rnd(toks.length)].g, pool.length?pool:['m','n'], 2)]); cur.bank=bank; cur.need=toks;
-    return `<div class="prompt">Build the word</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="boxes" id="boxes">${toks.map((t,i)=>t.silent?`<div class="box outside" data-i="${i}"><span class="tile silent ghost" data-g="e">e</span></div>`:`<button class="box" data-act="unbox" data-i="${i}" aria-label="sound box ${i+1}"></button>`).join('')}</div><div class="tiles" id="bank">${bank.map((g,i)=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="bank" data-v="${g}" data-i="${i}">${esc(g.replace('_e',''))}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
+  if(it.t==='build'){ const toks=tokenize(it.w); const inWord=toks.map(t=>t.g); const pool=taughtGraphemes(p).filter(g=>!inWord.includes(g)); const bank=shuffle([...inWord, ...distractorsG(toks[rnd(toks.length)].g, pool.length?pool:['m','n'], 2, inWord)]); cur.bank=bank; cur.need=toks;
+    return `<div class="prompt" id="bprompt">What sound does the word start with?</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:''}<div class="boxes" id="boxes">${toks.map((t,i)=>t.silent?`<div class="box outside" data-i="${i}"><span class="tile silent ghost" data-g="e">e</span></div>`:`<button class="box" data-act="unbox" data-i="${i}" aria-label="sound box ${i+1}"></button>`).join('')}</div><div class="tiles" id="bank">${bank.map((g,i)=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="bank" data-v="${g}" data-i="${i}">${esc(g.replace('_e',''))}</button>`).join('')}</div><div class="center"><button class="btn" data-act="check" id="checkbtn" disabled>Check ✓</button></div>`; }
   if(it.t==='switch'){ const toks=tokenize(it.w); cur.now=toks.map(t=>t.g); const target=tokenize(it.w2); const diffI=target.findIndex((x,i)=>x.t!==toks[i].t); cur.diffI=diffI; const bank=shuffle([target[diffI].g,...distractorsG(target[diffI].g,taughtGraphemes(p),2)]);
     return `<div class="prompt">Change one sound. Make it say…</div><div class="center">${hearBtn('hear2')}</div><div class="boxes" id="boxes">${toks.map((t,i)=>`<button class="box filled" data-act="swbox" data-i="${i}"><span class="tile ${t.v?'vowel':''}">${esc(t.t)}</span></button>`).join('')}</div><p class="center muted">Tap a box, then tap the new sound.</p><div class="tiles">${bank.map(g=>`<button class="tile ${G[g]&&G[g].v?'vowel':''}" data-act="swtile" data-v="${g}">${esc(g)}</button>`).join('')}</div>`; }
   if(it.t==='heart'){ const w=it.w; const hint=HEART_HINT[w]||''; const idx=hint?w.indexOf(hint):-1; const html=idx>=0?esc(w.slice(0,idx))+`<span class="heart">${esc(hint)}</span>`+esc(w.slice(idx+hint.length)):esc(w); const letters=shuffle([...w.split(''),...distractorsG(w[0],taughtGraphemes(p),2)]); cur.need=w.split('').map(c=>({t:c,g:c})); cur.bank=letters;
@@ -540,6 +557,8 @@ function next(ok){
       s.rounds[s.r]._requeued=true; const re=s.misses.splice(0,2).map(x=>Object.assign({},x,{retry:true})); s.rounds[s.r].push(...re); }
     go('play'); }, ok?900:1400);
 }
+// Build It stepwise prompt. Returns the text, or null when the task is not Build It or the boxes are full.
+function buildPrompt(){ if(!cur||cur.item.t!=='build') return null; const el=$('#bprompt'); if(!el) return null; const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const k=boxes.filter(x=>x.dataset.g).length; const full=k>=boxes.length; el.textContent=full?'Now tap Check ✓':k===0?'What sound does the word start with?':'What is the next sound?'; return full?null:el.textContent; }
 function onCorrect(g, task, chosen){ const p=P(); if(cur.revealed){ SFX.good(); fb('That is it. We will see this one again.',true); next(false); return; } if(g) record(p,g,task,true,chosen); SFX.good(); fb(praise(),true); next(true); }
 // Tap-to-answer tasks: after the reveal the child taps the glowing answer (model -> lead -> test). Build-style tasks reveal and move on.
 const RETRY_TASKS = new Set(['spy','first','count','find','read']);
@@ -569,16 +588,16 @@ app.addEventListener('click', async e=>{
   if(act==='play'){ session=buildSession(p); go('play'); return; }
   if(act==='placement'){ go('placement'); return; }
   if(act==='quit'){ endSession(false); go('home'); return; }
-  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g); else sayWord(it.w, it.t==='first'||it.t==='count'); return; }
+  if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g,{keyword:true}); else sayWord(it.w, it.t==='first'||it.t==='count'||it.t==='build'); return; }
   if(act==='hear2'){ sayWord(cur.item.w2); return; }
   if(cur&&cur.done) return;
   if(act==='pickg'){ const it=cur.item; const g=it.g; if(v===g){ b.classList.add('good'); onCorrect(g, it.t==='spy'&&it.mode==='g2k'?'sound':'decode', v); } else { b.classList.add('wobble'); onMiss(g,'decode',v,(n)=>{ if(n===1){ b.classList.add('dim'); if(it.t==='spy') sayPhoneme(g); else sayWord(it.w); } else { app.querySelectorAll('[data-act="pickg"]').forEach(x=>{ if(x.dataset.v===g) x.classList.add('good'); else x.classList.add('dim'); }); sayPhoneme(g).then(()=>sayKeyword(g)); } }); } return; }
   if(act==='pickn'){ const it=cur.item; if(+v===it.n){ b.classList.add('good'); onCorrect(it.g,'sound',null); } else { b.classList.add('wobble'); onMiss(it.g,'sound',null,(n)=>{ if(n===1){ b.classList.add('dim'); segmentAloud(it.w, showSegments(it.w)); } else { app.querySelectorAll('[data-act="pickn"]').forEach(x=>{ if(+x.dataset.v===it.n) x.classList.add('good'); else x.classList.add('dim'); }); segmentAloud(it.w, showSegments(it.w)).then(()=>sayWord(it.w)); } }); } return; }
   if(act==='pickw'){ const it=cur.item; if(v===it.w){ b.classList.add('good'); onCorrect(it.g,'decode',null); } else { b.classList.add('wobble'); const chosenTok=it.t==='find'?tokenize(v).find((x,i)=>x.t!==(tokenize(it.w)[i]||{}).t):null; onMiss(it.g,'decode',chosenTok?chosenTok.g:null,(n)=>{ if(n===1){ b.classList.add('dim'); sayWord(it.w); } else { app.querySelectorAll('[data-act="pickw"]').forEach(x=>{ if(x.dataset.v===it.w) x.classList.add('good'); else x.classList.add('dim'); }); segmentAloud(it.w, showSegments(it.w)).then(()=>sayWord(it.w)); } }); } return; }
   if(act==='snd'){ b.classList.add('sel'); setTimeout(()=>b.classList.remove('sel'),300); await sayPhoneme(v); return; }
-  if(act==='blend'){ await segmentAloud(cur.item.w); await sayWord(cur.item.w); return; }
-  if(act==='bank'){ const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const empty=boxes.find(x=>!x.dataset.g); if(!empty) return; SFX.tap(); empty.dataset.g=v; empty.dataset.bi=b.dataset.i; empty.classList.add('filled'); empty.innerHTML=`<span class="tile ${G[v]&&G[v].v?'vowel':''}">${esc(v.replace('_e',''))}</span>`; b.classList.add('used'); $('#checkbtn').disabled=boxes.some(x=>!x.dataset.g); if(cur.item.t!=='heart'&&cur.item.t!=='build2') sayPhoneme(v); return; }
-  if(act==='unbox'){ if(!b.dataset.g) return; const bi=b.dataset.bi; const t=app.querySelector(`#bank [data-i="${bi}"]`); if(t) t.classList.remove('used'); delete b.dataset.g; delete b.dataset.bi; b.classList.remove('filled'); b.innerHTML=''; $('#checkbtn').disabled=true; return; }
+  if(act==='blend'){ if(await segmentAloud(cur.item.w)) await sayWord(cur.item.w); return; }
+  if(act==='bank'){ const boxes=[...app.querySelectorAll('#boxes .box:not(.outside)')]; const empty=boxes.find(x=>!x.dataset.g); if(!empty) return; SFX.tap(); empty.dataset.g=v; empty.dataset.bi=b.dataset.i; empty.classList.add('filled'); empty.innerHTML=`<span class="tile ${G[v]&&G[v].v?'vowel':''}">${esc(v.replace('_e',''))}</span>`; b.classList.add('used'); $('#checkbtn').disabled=boxes.some(x=>!x.dataset.g); if(cur.item.t==='build'){ const gen=SPEECH_GEN; sayPhoneme(v).then(()=>{ const t=buildPrompt(); if(t&&gen===SPEECH_GEN) speak(t); }); } else if(cur.item.t!=='heart'&&cur.item.t!=='build2') sayPhoneme(v); return; }
+  if(act==='unbox'){ if(!b.dataset.g) return; const bi=b.dataset.bi; const t=app.querySelector(`#bank [data-i="${bi}"]`); if(t) t.classList.remove('used'); delete b.dataset.g; delete b.dataset.bi; b.classList.remove('filled'); b.innerHTML=''; $('#checkbtn').disabled=true; buildPrompt(); return; }
   if(act==='check'){ checkBuild(); return; }
   if(act==='swbox'){ app.querySelectorAll('[data-act="swbox"]').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); cur.sel=+b.dataset.i; SFX.tap(); return; }
   if(act==='swtile'){ const it=cur.item; if(cur.sel==null){ fb('Tap a box first.'); return; } const target=tokenize(it.w2)[cur.diffI].g; if(cur.sel===cur.diffI && v===target){ const box=app.querySelector(`[data-act="swbox"][data-i="${cur.sel}"]`); box.innerHTML=`<span class="tile ${G[v]&&G[v].v?'vowel':''} good">${esc(v)}</span>`; await sayWord(it.w2); onCorrect(target,'encode',v); } else { b.classList.add('wobble'); onMiss(target,'encode',v,(n)=>{ if(n===1){ sayWord(it.w2); app.querySelectorAll('[data-act="swbox"]').forEach(x=>{ if(+x.dataset.i===cur.diffI) x.classList.add('sel'); else x.classList.remove('sel'); }); cur.sel=cur.diffI; fb('Listen again. Which sound changed?'); } else { const box=app.querySelector(`[data-act="swbox"][data-i="${cur.diffI}"]`); box.innerHTML=`<span class="tile good">${esc(target)}</span>`; sayWord(it.w2); } }); } return; }
@@ -615,7 +634,8 @@ app.addEventListener('input', e=>{
 });
 // Segmentation scaffold. Emits onStep(i) per phoneme so a visual row can light in sync (one clock).
 // Never speaks a keyword WORD here: a stop sound with no parent recording is a silent, lit box.
-async function segmentAloud(w, onStep){ const toks=tokenize(w).filter(t=>!t.silent); for(let i=0;i<toks.length;i++){ const g=toks[i].g; if(onStep) onStep(i); if(DB.voice['g:'+g]) await playClip(DB.voice['g:'+g]); else if(G[g]&&G[g].say) await speak(G[g].say,{rate:.7}); else await new Promise(r=>setTimeout(r,450)); await new Promise(r=>setTimeout(r,120)); } }
+// Returns false if the screen changed mid-way (caller must not speak the word afterwards).
+async function segmentAloud(w, onStep){ const gen=SPEECH_GEN; const toks=tokenize(w).filter(t=>!t.silent); for(let i=0;i<toks.length;i++){ if(gen!==SPEECH_GEN) return false; const g=toks[i].g; if(onStep) onStep(i); if(DB.voice['g:'+g]) await playClip(DB.voice['g:'+g]); else if(synthPhoneme(g)) await new Promise(r=>setTimeout(r,500)); else if(G[g]&&G[g].say) await speak(G[g].say,{rate:.7}); else await new Promise(r=>setTimeout(r,450)); await new Promise(r=>setTimeout(r,120)); } return gen===SPEECH_GEN; }
 // Visual segmentation row for a miss scaffold: one box per phoneme, returns a lighter for segmentAloud.
 function showSegments(w){ const item=$('#item'); if(!item) return ()=>{}; let row=item.querySelector('#seg'); if(!row){ row=document.createElement('div'); row.id='seg'; row.className='boxes'; row.style.marginTop='6px'; const toks=tokenize(w).filter(t=>!t.silent); row.innerHTML=toks.map(()=>`<div class="box seg" style="--tilepx:56px"></div>`).join(''); const prompt=item.querySelector('.prompt'); if(prompt&&prompt.nextSibling) prompt.parentNode.insertBefore(row, prompt.nextSibling); else item.appendChild(row); } const boxes=[...row.querySelectorAll('.box')]; return (i)=>{ boxes.forEach((b,j)=>b.classList.toggle('lit', j<=i)); }; }
 function checkBuild(){
@@ -627,8 +647,8 @@ function checkBuild(){
   boxes.forEach((x,i)=>{ if(got[i]!==need[i]) x.querySelector('.tile').classList.add('wobble'); });
   if(it.t==='heart'){ cur.miss++; SFX.again(); if(cur.miss===1){ fb('Almost. Fix the wobbly ones.'); boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; sayWord(it.w); } else { fb('Here it is.'); boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile good">${esc(need[i])}</span>`; }); next(false); } return; }
   onMiss(need[wrongI],'encode',chosen,(n)=>{
-    if(n===1){ boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; segmentAloud(it.w).then(()=>sayWord(it.w)); }
-    else { boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile ${G[need[i]]&&G[need[i]].v?'vowel':''} good">${esc(need[i].replace('_e',''))}</span>`; }); segmentAloud(it.w).then(()=>sayWord(it.w)); }
+    if(n===1){ boxes.forEach((x,i)=>{ if(got[i]!==need[i]){ const t=app.querySelector(`#bank [data-i="${x.dataset.bi}"]`); if(t) t.classList.remove('used'); delete x.dataset.g; delete x.dataset.bi; x.classList.remove('filled'); x.innerHTML=''; } }); $('#checkbtn').disabled=true; buildPrompt(); segmentAloud(it.w).then(ok=>{ if(ok) sayWord(it.w,true); }); }
+    else { boxes.forEach((x,i)=>{ x.innerHTML=`<span class="tile ${G[need[i]]&&G[need[i]].v?'vowel':''} good">${esc(need[i].replace('_e',''))}</span>`; }); segmentAloud(it.w).then(ok=>{ if(ok) sayWord(it.w,true); }); }
   });
 }
 
@@ -655,19 +675,19 @@ S.break.after=function(id){
   let left=45; const tick=setInterval(()=>{ left--; if(left<=0){ clearInterval(tick); return; } ready.textContent=`Resting… ${left}`; },1000); S.break._tick=tick;
   if(id==='breathe'){ const bub=$('#bubble'), lab=$('#blabel'); let phase=0; const phases=[['Breathe in…','in'],['Hold…','hold'],['Breathe out…','out'],['Hold…','hold']];
     function step(){ const [t,c]=phases[phase%4]; lab.textContent=t; if(c==='in') bub.classList.add('in'); if(c==='out') bub.classList.remove('in'); phase++; } step(); S.break._iv=setInterval(step,4000); return; }
-  const cv=$('#cv'), wrap=$('#bw'); const ctx=cv.getContext('2d'); function size(){ cv.width=wrap.clientWidth*devicePixelRatio; cv.height=wrap.clientHeight*devicePixelRatio; } size();
+  const cv=$('#cv'), wrap=$('#bw'); const ctx=cv.getContext('2d'); const dpr=Math.min(devicePixelRatio||1,2); function size(){ cv.width=wrap.clientWidth*dpr; cv.height=wrap.clientHeight*dpr; } size();
   const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#2F7D6B'; const gem=getComputedStyle(document.documentElement).getPropertyValue('--gem').trim()||'#C45C8B'; const warm=getComputedStyle(document.documentElement).getPropertyValue('--warm').trim()||'#F2B544';
-  const W=()=>cv.width, H=()=>cv.height, dpr=devicePixelRatio;
+  const W=()=>cv.width, H=()=>cv.height; const live=()=>cv.isConnected; // stop any loop whose canvas left the DOM
   const pt=e=>{ const r=cv.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:(t.clientX-r.left)*dpr,y:(t.clientY-r.top)*dpr}; };
-  if(id==='garden'){ const flowers=[]; const plant=e=>{ e.preventDefault(); const q=pt(e); flowers.push({x:q.x,y:Math.max(q.y,H()*.5),h:0,max:60+Math.random()*120,c:pick([gem,warm,acc,'#E88D67','#8FB3E0']),t:Math.random()*6}); SFX.pop(); };
+  if(id==='garden'){ const flowers=[], MAXF=60; let lastPlant=0; const plant=e=>{ e.preventDefault(); const now=performance.now(); if(now-lastPlant<120) return; lastPlant=now; const q=pt(e); if(flowers.length>=MAXF) flowers.shift(); flowers.push({x:q.x,y:Math.max(q.y,H()*.5),h:0,max:60+Math.random()*120,c:pick([gem,warm,acc,'#E88D67','#8FB3E0']),t:Math.random()*6}); SFX.pop(); };
     cv.addEventListener('pointerdown',plant);
-    (function draw(){ ctx.clearRect(0,0,W(),H()); ctx.fillStyle=acc+'33'; ctx.fillRect(0,H()*.72,W(),H()); flowers.forEach(f=>{ f.h=Math.min(f.max,f.h+0.8); f.t+=0.02; const sway=Math.sin(f.t)*6*dpr; ctx.strokeStyle=acc; ctx.lineWidth=4*dpr; ctx.beginPath(); ctx.moveTo(f.x,f.y); ctx.quadraticCurveTo(f.x+sway,f.y-f.h*dpr*.5,f.x+sway,f.y-f.h*dpr); ctx.stroke(); const r=Math.min(14,f.h/4)*dpr; for(let i=0;i<6;i++){ const a=i/6*Math.PI*2+f.t; ctx.fillStyle=f.c; ctx.beginPath(); ctx.ellipse(f.x+sway+Math.cos(a)*r,f.y-f.h*dpr+Math.sin(a)*r,r*.7,r*.45,a,0,Math.PI*2); ctx.fill(); } ctx.fillStyle=warm; ctx.beginPath(); ctx.arc(f.x+sway,f.y-f.h*dpr,r*.5,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
+    (function draw(){ if(!live()){ animId=null; return; } ctx.clearRect(0,0,W(),H()); ctx.fillStyle=acc+'33'; ctx.fillRect(0,H()*.72,W(),H()); flowers.forEach(f=>{ f.h=Math.min(f.max,f.h+0.8); f.t+=0.02; const sway=Math.sin(f.t)*6*dpr; ctx.strokeStyle=acc; ctx.lineWidth=4*dpr; ctx.beginPath(); ctx.moveTo(f.x,f.y); ctx.quadraticCurveTo(f.x+sway,f.y-f.h*dpr*.5,f.x+sway,f.y-f.h*dpr); ctx.stroke(); const r=Math.min(14,f.h/4)*dpr; for(let i=0;i<6;i++){ const a=i/6*Math.PI*2+f.t; ctx.fillStyle=f.c; ctx.beginPath(); ctx.ellipse(f.x+sway+Math.cos(a)*r,f.y-f.h*dpr+Math.sin(a)*r,r*.7,r*.45,a,0,Math.PI*2); ctx.fill(); } ctx.fillStyle=warm; ctx.beginPath(); ctx.arc(f.x+sway,f.y-f.h*dpr,r*.5,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
   if(id==='bubbles'){ const bs=Array.from({length:14},()=>({x:Math.random()*W(),y:H()+Math.random()*H(),r:(14+Math.random()*26)*dpr,s:(0.2+Math.random()*0.4)*dpr,w:Math.random()*6}));
     cv.addEventListener('pointerdown',e=>{ e.preventDefault(); const q=pt(e); bs.forEach(b=>{ if(Math.hypot(b.x-q.x,b.y-q.y)<b.r*1.3){ b.y=H()+40; b.x=Math.random()*W(); SFX.pop(); } }); });
-    (function draw(){ ctx.clearRect(0,0,W(),H()); bs.forEach(b=>{ b.y-=b.s; b.w+=0.01; b.x+=Math.sin(b.w)*0.3*dpr; if(b.y<-b.r){ b.y=H()+b.r; b.x=Math.random()*W(); } const g=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,b.r*.1,b.x,b.y,b.r); g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(1,acc+'55'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
+    (function draw(){ if(!live()){ animId=null; return; } ctx.clearRect(0,0,W(),H()); bs.forEach(b=>{ b.y-=b.s; b.w+=0.01; b.x+=Math.sin(b.w)*0.3*dpr; if(b.y<-b.r){ b.y=H()+b.r; b.x=Math.random()*W(); } const g=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,b.r*.1,b.x,b.y,b.r); g.addColorStop(0,'rgba(255,255,255,.9)'); g.addColorStop(1,acc+'55'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }); animId=requestAnimationFrame(draw); })(); return; }
   if(id==='stars'){ const stars=[]; let down=false; const add=e=>{ const q=pt(e); stars.push({x:q.x,y:q.y,r:(2+Math.random()*4)*dpr,a:1,c:pick([warm,'#fff',gem])}); };
     cv.addEventListener('pointerdown',e=>{ e.preventDefault(); down=true; add(e); }); cv.addEventListener('pointermove',e=>{ if(down) add(e); }); cv.addEventListener('pointerup',()=>down=false); cv.addEventListener('pointercancel',()=>down=false);
-    (function draw(){ ctx.fillStyle='#1b1f3a'; ctx.fillRect(0,0,W(),H()); stars.forEach(s=>{ s.a=Math.max(0.15,s.a-0.002); ctx.globalAlpha=s.a; ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1; if(stars.length>600) stars.splice(0,stars.length-600); animId=requestAnimationFrame(draw); })(); return; }
+    (function draw(){ if(!live()){ animId=null; return; } ctx.fillStyle='#1b1f3a'; ctx.fillRect(0,0,W(),H()); stars.forEach(s=>{ s.a=Math.max(0.15,s.a-0.002); ctx.globalAlpha=s.a; ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1; if(stars.length>600) stars.splice(0,stars.length-600); animId=requestAnimationFrame(draw); })(); return; }
 };
 function cleanupBreak(){ if(breakTimer){ clearTimeout(breakTimer); breakTimer=null; } if(S.break._iv){ clearInterval(S.break._iv); S.break._iv=null; } if(S.break._tick){ clearInterval(S.break._tick); S.break._tick=null; } if(animId){ cancelAnimationFrame(animId); animId=null; } }
 function endSession(done){ const p=P(); if(!session||!p) return; const min=(Date.now()-session.start)/60000; if(session.total>0) p.sessions.push({t:session.start,min:Math.round(min*10)/10,ok:session.correct,n:session.total,lvl:p.level,done}); if(p.sessions.length>200) p.sessions.shift(); saveAll(); session=null; }
