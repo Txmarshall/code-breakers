@@ -185,7 +185,24 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     expect(offlineOk, 'app loads offline from the service worker cache');
     await page.reload({ waitUntil: 'load' }); await page.waitForTimeout(500);
   }
+  // progress blob: versioned, merge keeps the newer profile, settings follow the newer blob
+  const merge = await page.evaluate(() => {
+    const b = progressBlob(); const p = DB.profiles[0]; const before = p.level;
+    const older = JSON.parse(JSON.stringify(b)); older.profiles[0].level = 9; older.profiles[0].updated = (p.updated || 1) - 1000; older.updated = 0;
+    const r1 = importBlob(older); const keptLevel = DB.profiles[0].level;
+    const newer = JSON.parse(JSON.stringify(b)); newer.profiles[0].level = 4; newer.profiles[0].updated = Date.now() + 1000; newer.profiles.push(Object.assign(JSON.parse(JSON.stringify(b.profiles[0])), { id: 'zz', name: 'Zed', updated: 1 }));
+    const r2 = importBlob(newer); const tookLevel = DB.profiles[0].level; const added = !!DB.profiles.find(x => x.id === 'zz');
+    let bad = false; try { importBlob({ nope: 1 }); } catch (e) { bad = true; }
+    return { v: b.v, app: b.app, stamped: !!p.updated, before, r1, keptLevel, r2, tookLevel, added, bad, persisted: DB.meta.persisted };
+  });
+  expect(merge.v === 1 && merge.app === 'code-breakers' && merge.stamped, `progress blob versioned and profile stamped: ${JSON.stringify(merge)}`);
+  expect(merge.keptLevel === merge.before && merge.r1.kept === 1, 'older backup never overwrites newer progress');
+  expect(merge.tookLevel === 4 && merge.added && merge.r2.took === 2, 'newer backup restores profile and adds missing player');
+  expect(merge.bad, 'garbage blob is rejected');
+  expect(merge.persisted !== null, `persistent storage requested (granted=${merge.persisted})`);
   await page.evaluate(() => { view = 'grown'; render(); });
+  const safe = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find(x => x.textContent === 'Keep progress safe'); return h ? { chips: [...h.parentElement.querySelectorAll('.chip')].map(c => c.textContent), btn: !!h.parentElement.querySelector('[data-act="backup"]'), file: !!document.getElementById('bfile') } : null; });
+  expect(safe && safe.btn && safe.file, `Keep progress safe card: ${JSON.stringify(safe)}`);
   const card = await page.evaluate(() => { const h = [...document.querySelectorAll('h2')].find(x => x.textContent === 'On the home screen'); return h ? h.parentElement.textContent.slice(0, 80) : null; });
   expect(!!card, `install card present in Grown-ups: ${card}`);
 

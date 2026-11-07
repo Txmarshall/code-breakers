@@ -251,7 +251,30 @@ const LS = {
 };
 const DB = { profiles: LS.get('cb_profiles',[]), current: LS.get('cb_current',null), voice: LS.get('cb_voice',{}), settings: LS.get('cb_settings',{ls:0.08,font:'verdana',paper:'cream',theme:'auto',rate:0.8,voice:'',reveal:2}) };
 let INSTALL=null; addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); INSTALL=e; if(view==='grown') render(); }); addEventListener('appinstalled',()=>{ INSTALL=null; toast('Code Breakers is on the home screen'); if(view==='grown') render(); });
-function saveAll(){ LS.set('cb_profiles',DB.profiles); LS.set('cb_current',DB.current); LS.set('cb_settings',DB.settings); }
+DB.meta=LS.get('cb_meta',{v:1,lastBackup:0,updated:0,persisted:null});
+function saveAll(){ DB.meta.updated=Date.now(); LS.set('cb_profiles',DB.profiles); LS.set('cb_current',DB.current); LS.set('cb_settings',DB.settings); LS.set('cb_meta',DB.meta); }
+function saveMeta(){ LS.set('cb_meta',DB.meta); }
+/* Progress blob: the unit of truth for backup, restore and any future sync. Versioned; profiles carry an updated stamp so merges keep the newer copy. */
+const BLOB_V=1;
+function progressBlob(){ return {v:BLOB_V,app:'code-breakers',exported:new Date().toISOString(),updated:DB.meta.updated||0,profiles:DB.profiles,settings:DB.settings}; }
+function importBlob(d){
+  if(!d||typeof d!=='object'||!Array.isArray(d.profiles)) throw new Error('not a progress blob');
+  let kept=0, took=0;
+  d.profiles.forEach(np=>{ const i=DB.profiles.findIndex(x=>x.id===np.id); if(i<0){ DB.profiles.push(np); took++; } else if((DB.profiles[i].updated||0)>(np.updated||0)){ kept++; } else { DB.profiles[i]=np; took++; } });
+  if(d.settings&&(d.updated||0)>=(DB.meta.updated||0)) DB.settings=d.settings;
+  if(!DB.current&&DB.profiles[0]) DB.current=DB.profiles[0].id;
+  saveAll(); return {took,kept};
+}
+function restoredMsg(r){ return 'Progress restored ('+r.took+' player'+(r.took===1?'':'s')+(r.kept?', '+r.kept+' newer here kept':'')+')'; }
+function stampProfile(p){ if(p) p.updated=Date.now(); }
+function backupDue(){ const played=DB.profiles.some(p=>(p.sessions||[]).length>=3); return played && (Date.now()-(DB.meta.lastBackup||0))>14*864e5; }
+async function backupToFile(){
+  const blob=new Blob([JSON.stringify(progressBlob(),null,1)],{type:'application/json'}); const name='code-breakers-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  let shared=false;
+  try{ const f=new File([blob],name,{type:'application/json'}); if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:'Code Breakers progress'}); shared=true; } }catch(e){ if(e&&e.name==='AbortError') return false; }
+  if(!shared){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); }
+  DB.meta.lastBackup=Date.now(); saveMeta(); return true;
+}
 function saveVoice(){ LS.set('cb_voice',DB.voice); }
 function newProfile(name,band,skin){
   return {id:'p'+Date.now().toString(36),name,band,skin,level:1,g:{},conf:{},coll:[],sessions:[],heart:{},created:Date.now(),placed:band==='young'};
@@ -293,7 +316,7 @@ function levelOf(id){ return LEVELS.find(l=>l.id===id); }
 function levelSecure(p,l){ return l.g.every(g=>mastery(p,g)==='secure'); }
 function checkAdvance(p){
   const l=levelOf(p.level); if(!l) return false;
-  if(levelSecure(p,l) && p.level<LEVELS.length){ p.level++; saveAll(); return true; }
+  if(levelSecure(p,l) && p.level<LEVELS.length){ p.level++; stampProfile(p); saveAll(); return true; }
   return false;
 }
 function weakness(p,g){ const r=p.g[g]; if(!r||!r.a.length) return 0.6; const last=r.a.slice(-8); return 1-(last.reduce((a,b)=>a+b,0)/last.length); }
@@ -420,7 +443,7 @@ S.home=function(){
   const secureCount=l.g.filter(g=>mastery(p,g)==='secure').length;
   const today=new Date().toDateString(); const todayMin=p.sessions.filter(s=>new Date(s.t).toDateString()===today).reduce((a,s)=>a+s.min,0);
   return `<header class="bar"><button class="btn ghost small" data-act="switch" aria-label="Switch player">${sk.icon}</button><div class="title">${esc(p.name)}'s ${sk.word}</div><button class="btn ghost small" data-act="grown">Grown-ups</button></header>
-  <main class="stack">
+  <main class="stack">${backupDue()?`<p class="center muted" style="font-size:.9rem">Grown-ups: it has been a while since the last progress backup.</p>`:''}
     <div class="card stack center">
       <div class="chip">Level ${l.id} · ${esc(l.name)}</div>
       <div class="tiles">${l.g.map(g=>`<span class="tile ${G[g].v?'vowel':''} ${mastery(p,g)==='secure'?'good':''}" style="--tilepx:56px">${G[g].e&&['blend','syll','morph'].includes(g)?G[g].e:esc(g.replace('_e','-e'))}</span>`).join('')}</div>
@@ -594,7 +617,7 @@ app.addEventListener('click', async e=>{
   if(act==='newprofile'){ go('newprofile'); return; }
   if(act==='choose'){ DB.current=b.dataset.id; saveAll(); go('home'); return; }
   if(act==='band'||act==='skin'){ S.newprofile[act]=v; b.parentElement.querySelectorAll('[data-act="'+act+'"]').forEach(x=>x.classList.remove('good')); b.classList.add('good'); const n=$('#pname').value.trim(); $('#createbtn').disabled=!(n&&S.newprofile.band&&S.newprofile.skin); return; }
-  if(act==='createprofile'){ const n=$('#pname').value.trim(); if(!n) return; const pr=newProfile(n,S.newprofile.band,S.newprofile.skin); DB.profiles.push(pr); DB.current=pr.id; saveAll(); speak('Hello '+n+'. You are a code breaker.'); go(pr.band==='older'?'placement':'home'); return; }
+  if(act==='createprofile'){ const n=$('#pname').value.trim(); if(!n) return; const pr=newProfile(n,S.newprofile.band,S.newprofile.skin); stampProfile(pr); DB.profiles.push(pr); DB.current=pr.id; saveAll(); speak('Hello '+n+'. You are a code breaker.'); go(pr.band==='older'?'placement':'home'); return; }
   if(act==='play'){ session=buildSession(p); go('play'); return; }
   if(act==='placement'){ go('placement'); return; }
   if(act==='quit'){ endSession(false); go('home'); return; }
@@ -631,12 +654,17 @@ app.addEventListener('click', async e=>{
   if(act==='rec'){ S.grown.recOpen=true; recordClip(b.dataset.k, b); return; }
   if(act==='playclip'){ playClip(DB.voice[b.dataset.k]); return; }
   if(act==='delclip'){ delete DB.voice[b.dataset.k]; saveVoice(); render(); return; }
-  if(act==='export'){ const code=btoa(unescape(encodeURIComponent(JSON.stringify({profiles:DB.profiles,settings:DB.settings})))); $('#code').value=code; try{ await navigator.clipboard.writeText(code); toast('Copied progress code'); }catch(e){ $('#code').select(); toast('Code shown below — copy it'); } return; }
-  if(act==='import'){ try{ const d=JSON.parse(decodeURIComponent(escape(atob($('#code').value.trim())))); if(d.profiles){ d.profiles.forEach(np=>{ const i=DB.profiles.findIndex(x=>x.id===np.id); if(i>=0) DB.profiles[i]=np; else DB.profiles.push(np); }); if(d.settings) DB.settings=d.settings; saveAll(); toast('Progress restored'); render(); } }catch(e){ toast('That code did not work'); } return; }
+  if(act==='export'){ const code=btoa(unescape(encodeURIComponent(JSON.stringify(progressBlob())))); $('#code').value=code; try{ await navigator.clipboard.writeText(code); toast('Copied progress code'); }catch(e){ $('#code').select(); toast('Code shown below — copy it'); } return; }
+  if(act==='import'){ try{ const r=importBlob(JSON.parse(decodeURIComponent(escape(atob($('#code').value.trim()))))); toast(restoredMsg(r)); render(); }catch(e){ toast('That code did not work'); } return; }
+  if(act==='backup'){ const ok=await backupToFile(); if(ok){ toast('Backup saved'); render(); } return; }
+  if(act==='restorefile'){ $('#bfile').click(); return; }
   if(act==='resetprofile'){ const pr=DB.profiles.find(x=>x.id===b.dataset.id); if(!pr) return; if(b.dataset.sure!=='1'){ b.dataset.sure='1'; b.textContent='Tap again to confirm reset'; return; } pr.level=1; pr.g={}; pr.conf={}; pr.coll=[]; pr.sessions=[]; pr.heart={}; pr.placed=pr.band==='young'; saveAll(); toast('Reset'); render(); return; }
   if(act==='delprofile'){ if(b.dataset.sure!=='1'){ b.dataset.sure='1'; b.textContent='Tap again to delete'; return; } DB.profiles=DB.profiles.filter(x=>x.id!==b.dataset.id); if(DB.current===b.dataset.id) DB.current=DB.profiles[0]?DB.profiles[0].id:null; saveAll(); render(); return; }
-  if(act==='setlevel'){ const pr=DB.profiles.find(x=>x.id===b.dataset.id); pr.level=+$('#lvl'+pr.id).value; saveAll(); toast('Level set to '+pr.level); return; }
+  if(act==='setlevel'){ const pr=DB.profiles.find(x=>x.id===b.dataset.id); pr.level=+$('#lvl'+pr.id).value; stampProfile(pr); saveAll(); toast('Level set to '+pr.level); return; }
   if(act==='why'){ go('why'); return; }
+});
+app.addEventListener('change', async e=>{
+  if(e.target.id==='bfile'){ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const r=importBlob(JSON.parse(await f.text())); toast(restoredMsg(r)); render(); }catch(err){ toast('That file is not a Code Breakers backup'); } }
 });
 app.addEventListener('input', e=>{
   if(e.target.id==='pname'){ const n=e.target.value.trim(); $('#createbtn').disabled=!(n&&S.newprofile.band&&S.newprofile.skin); }
@@ -701,7 +729,7 @@ S.break.after=function(id){
     (function draw(){ if(!live()){ animId=null; return; } ctx.fillStyle='#1b1f3a'; ctx.fillRect(0,0,W(),H()); stars.forEach(s=>{ s.a=Math.max(0.15,s.a-0.002); ctx.globalAlpha=s.a; ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1; if(stars.length>600) stars.splice(0,stars.length-600); animId=requestAnimationFrame(draw); })(); return; }
 };
 function cleanupBreak(){ if(breakTimer){ clearTimeout(breakTimer); breakTimer=null; } if(S.break._iv){ clearInterval(S.break._iv); S.break._iv=null; } if(S.break._tick){ clearInterval(S.break._tick); S.break._tick=null; } if(animId){ cancelAnimationFrame(animId); animId=null; } }
-function endSession(done){ const p=P(); if(!session||!p) return; const min=(Date.now()-session.start)/60000; if(session.total>0) p.sessions.push({t:session.start,min:Math.round(min*10)/10,ok:session.correct,n:session.total,lvl:p.level,done}); if(p.sessions.length>200) p.sessions.shift(); saveAll(); session=null; }
+function endSession(done){ const p=P(); if(!session||!p) return; const min=(Date.now()-session.start)/60000; if(session.total>0) p.sessions.push({t:session.start,min:Math.round(min*10)/10,ok:session.correct,n:session.total,lvl:p.level,done}); if(p.sessions.length>200) p.sessions.shift(); stampProfile(p); saveAll(); session=null; }
 
 /* --- placement (older learners) --- */
 S.placement=function(){
@@ -771,7 +799,12 @@ S.grown=function(){
       <div class="row"><span style="font-weight:700">Theme</span>${[['auto','Auto'],['light','Light'],['dark','Dark']].map(([k,n])=>`<button class="btn small ${s.theme===k?'':'secondary'}" data-act="set" data-k="theme" data-v="${k}">${n}</button>`).join('')}</div>
       <p class="wordbig" style="font-size:1.8rem">the quick brown fox</p>
     </div>
-    <div class="card stack"><h2>Move progress to another device</h2><p class="cite">Progress lives on this device only. Copy the code here and paste it on the other device.</p><div class="row"><button class="btn small secondary" data-act="export">Copy progress code</button><button class="btn small ghost" data-act="import">Restore from code</button></div><textarea id="code" aria-label="progress code" placeholder="Progress code"></textarea></div>
+    <div class="card stack"><h2>Keep progress safe</h2>
+      <div class="row"><span class="chip" ${backupDue()?'style="background:var(--warm);color:#2A1A05"':''}>${DB.meta.lastBackup?'Last backup '+Math.round((Date.now()-DB.meta.lastBackup)/864e5)+' day(s) ago':'Never backed up'}</span><span class="chip">${DB.meta.persisted===true?'Storage protected':DB.meta.persisted===false?'Storage may be cleared by the browser':'Storage check pending'}</span></div>
+      <p class="cite">Progress lives on this device. A backup file restores every player on any device, and newer progress on a device is never overwritten by an older file.</p>
+      <div class="row"><button class="btn small secondary" data-act="backup">Save backup file</button><button class="btn small ghost" data-act="restorefile">Restore from file</button><input type="file" id="bfile" accept="application/json,.json" hidden></div>
+      <details><summary>Or move progress with a code</summary><div class="row" style="margin-top:8px"><button class="btn small secondary" data-act="export">Copy progress code</button><button class="btn small ghost" data-act="import">Restore from code</button></div><textarea id="code" aria-label="progress code" placeholder="Progress code"></textarea></details>
+    </div>
   </main>`;
 };
 async function recordClip(key, btn){
@@ -834,6 +867,6 @@ S.why=function(){
 };
 
 /* ---------- 7. BOOT ---------- */
-function boot(){ applySettings(); view=P()?'home':'start'; render(); }
+function boot(){ applySettings(); view=P()?'home':'start'; render(); if(navigator.storage&&navigator.storage.persist){ navigator.storage.persist().then(ok=>{ DB.meta.persisted=!!ok; saveMeta(); if(view==='grown') render(); }).catch(()=>{}); } }
 if(window.claude&&window.claude.hot&&window.claude.hot.ready){ window.claude.hot.ready(()=>boot()); } else boot();
 </script>
