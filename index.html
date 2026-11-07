@@ -72,7 +72,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);fon
   -webkit-text-size-adjust:100%;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
 #app{min-height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:calc(12px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 header.bar{display:flex;align-items:center;gap:10px;min-height:56px}
 header.bar .title{font-weight:700;font-size:1.05rem;letter-spacing:.02em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:.9rem;font-weight:700}
@@ -130,6 +130,7 @@ button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;user-
 .prompt{font-size:1.25rem;font-weight:700;text-align:center}
 .feedback{min-height:2em;text-align:center;font-weight:700;color:var(--accent)}
 .progress{display:flex;gap:6px;justify-content:center}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:-4px}.nav .muted{font-size:.9rem}
 .progress i{width:14px;height:14px;border-radius:50%;background:var(--line);display:block}
 .progress i.on{background:var(--accent)}
 .progress i.now{background:var(--warm)}
@@ -390,9 +391,9 @@ const SYN = {
   w:{vowel:[300,650,2300],glide:[420,900,2400],dur:.4,vg:.35}, y:{vowel:[280,2400,3100],glide:[400,2100,2900],dur:.4,vg:.55},
   h:{noise:{type:'lowpass',f:1400,q:.5,g:.32},dur:.3},
   // stops: one short burst, then nothing (no "uh"). Voiced stops add 70 ms of low hum.
-  p:{burst:{type:'lowpass',f:1000,q:.6,g:2.2,len:.02},dur:.22}, b:{burst:{type:'lowpass',f:1000,q:.6,g:1.8,len:.02},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
-  t:{burst:{type:'bandpass',f:4500,q:.6,g:.7,len:.025},dur:.22}, d:{burst:{type:'bandpass',f:4500,q:.6,g:.55,len:.025},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
-  k:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},dur:.22}, c:'k', ck:'k', g:{burst:{type:'bandpass',f:2200,q:1.2,g:.8,len:.035},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
+  p:{burst:{type:'lowpass',f:900,q:.7,g:2.4,len:.018},noise:{type:'lowpass',f:1100,q:.5,g:.40,at:.015,len:.07},dur:.26}, b:{burst:{type:'lowpass',f:1000,q:.6,g:2.0,len:.02},hum:{f:120,g:.07,lp:300,len:.07},dur:.22},
+  t:{burst:{type:'bandpass',f:4500,q:.6,g:.8,len:.02},noise:{type:'highpass',f:3800,q:.5,g:.16,at:.015,len:.06},dur:.26}, d:{burst:{type:'bandpass',f:4500,q:.6,g:1.0,len:.025},hum:{f:120,g:.07,lp:300,len:.07},dur:.22},
+  k:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},noise:{type:'bandpass',f:1900,q:.9,g:.30,at:.02,len:.07},dur:.26}, c:'k', ck:'k', g:{burst:{type:'bandpass',f:2200,q:1.2,g:1.1,len:.035},hum:{f:120,g:.07,lp:300,len:.07},dur:.22},
   qu:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},vowel:[300,650,2300],glide:[420,900,2400],vowelAt:.05,dur:.42,vg:.35},
   x:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},noise:{type:'bandpass',f:7200,q:.9,g:.14,at:.05},dur:.45},
   ch:{burst:{type:'bandpass',f:4500,q:.6,g:.7,len:.02},noise:{type:'bandpass',f:2800,q:1.4,g:.22,at:.02,len:.14},dur:.25},
@@ -434,11 +435,11 @@ async function sayPhoneme(g, opts){
   // Parent recording first (correct, clipped sounds). Otherwise the WebAudio synth (every single-sound grapheme has an
   // entry: fricatives, nasals, short vowels, approximants, and stops as a bare burst with no "uh"). TTS only for the
   // long vowels/digraphs it reads correctly. Never a keyword on a tile tap: 'tiger' mid-word made a learner think the word was 'tiger'.
+  if(opts&&opts.keyword) return sayKeyword(g); // picture->sound item: the clue is the word; the sound would be the answer
   if(DB.voice['g:'+g]) return playClip(DB.voice['g:'+g]);
   const sy=synthPhoneme(g); if(sy) return sy;
   const d=G[g]||{};
   if(d.say) await speak(d.say,{rate:.7});
-  else if(d.k && opts && opts.keyword) await speak(d.k.split(' ')[0],{rate:.8});
 }
 async function sayKeyword(g){ const d=G[g]; if(!d) return; if(DB.voice['k:'+g]) return playClip(DB.voice['k:'+g]); return speak(d.k); }
 
@@ -608,15 +609,16 @@ S.play=function(){
   cur={item, miss:0, picked:[], sel:null, done:false, revealed:false};
   const sk=SKINS[p.skin];
   const prog=`<div class="progress">${round.map((_,i)=>`<i class="${i<s.i?'on':i===s.i?'now':''}"></i>`).join('')}</div>`;
+  const nav=`<div class="nav"><button class="btn ghost small" data-act="prev" aria-label="Back" ${s.i===0?'disabled':''}>◀ Back</button><span class="muted">${s.i+1} / ${round.length}</span><button class="btn ghost small" data-act="skip" aria-label="Next">Next ▶</button></div>`;
   const head=`<header class="bar"><button class="btn ghost small" data-act="quit" aria-label="Stop">✕</button><div class="title">${sk.round} ${s.r+1} · Level ${p.level}</div><span class="chip">${sk.icon} ${p.coll.length}</span></header>`;
-  return head+`<main class="stack">${prog}<div class="card stack" id="item">${itemHTML(item,p)}</div><div class="feedback" id="fb"></div></main>`;
+  return head+`<main class="stack">${prog}${nav}<div class="card stack" id="item">${itemHTML(item,p)}</div><div class="feedback" id="fb"></div></main>`;
 };
 S.play.after=function(){ if(!cur) return; const it=cur.item; setTimeout(()=>{ if(it.t==='spy') sayPhoneme(it.g,{keyword:it.mode==='g2k'}); else if(it.t==='build'){ const gen=SPEECH_GEN; sayWord(it.w,true).then(()=>{ const t=buildPrompt(); if(t&&gen===SPEECH_GEN) speak(t); }); } else if(it.t==='first'||it.t==='count'||it.t==='find') sayWord(it.w, it.t!=='find'); else if(it.t==='switch') sayWord(it.w); else if(it.t==='heart') sayWord(it.w); else if(it.t==='read') speak('Read the word. Tap each sound.'); else if(it.t==='split') speak('Where does '+it.w+' split?'); else if(it.t==='peel') speak('Find the parts of '+it.w+'.'); else if(it.t==='build2') sayWord(it.w); },250); };
 
 function itemHTML(it,p){
   const up=false;
   if(it.t==='spy'){
-    if(it.mode==='g2k') return `<div class="prompt">Which sound is this?</div><div class="center">${hearBtn('hear')}</div><div class="emoji-big">${G[it.g].e}</div><p class="center muted">${esc(G[it.g].k)}</p><div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g.replace('_e','-e'))}</button>`).join('')}</div>`;
+    if(it.mode==='g2k') return `<div class="prompt">Which sound does it start with?</div><div class="center">${hearBtn('hear')}</div><div class="emoji-big">${G[it.g].e}</div><div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g.replace('_e','-e'))}</button>`).join('')}</div>`;
     return `<div class="prompt">Which picture starts with this sound?</div><div class="center">${hearBtn('hear')}</div><div class="center"><span class="tile vowel" style="--tilepx:96px;${G[it.g].v?'':'border-color:var(--line)'}">${esc(it.g.replace('_e','-e'))}</span></div><div class="picks">${it.opts.map(g=>`<button class="pick emoji" data-act="pickg" data-v="${g}">${G[g].e}</button>`).join('')}</div>`;
   }
   if(it.t==='first') return `<div class="prompt">What is the first sound in…</div><div class="center">${hearBtn('hear')}</div>${PIC[it.w]?`<div class="emoji-big">${PIC[it.w]}</div>`:'<div class="emoji-big">👂</div><p class="center muted" style="margin-top:-6px;font-weight:600">Listen carefully</p>'}<div class="tiles">${it.opts.map(g=>`<button class="tile ${G[g].v?'vowel':''}" data-act="pickg" data-v="${g}" style="--tilepx:84px">${esc(g)}</button>`).join('')}</div>`;
@@ -643,8 +645,8 @@ function next(ok){
   const p=P(), s=session, it=cur.item;
   s.total++; if(ok) s.correct++;
   if(!ok) s.misses.push(it);
-  cur.done=true;
-  setTimeout(()=>{ s.i++; if(s.i>=s.rounds[s.r].length && s.misses.length && !s.rounds[s.r]._requeued){ // revisit missed items once at the end of the round
+  cur.done=true; const me=cur;
+  setTimeout(()=>{ if(cur!==me) return; s.i++; if(s.i>=s.rounds[s.r].length && s.misses.length && !s.rounds[s.r]._requeued){ // revisit missed items once at the end of the round
       s.rounds[s.r]._requeued=true; const re=s.misses.splice(0,2).map(x=>Object.assign({},x,{retry:true})); s.rounds[s.r].push(...re); }
     go('play'); }, ok?900:1400);
 }
@@ -679,6 +681,8 @@ app.addEventListener('click', async e=>{
   if(act==='play'){ session=buildSession(p); go('play'); return; }
   if(act==='placement'){ go('placement'); return; }
   if(act==='quit'){ endSession(false); go('home'); return; }
+  if(act==='prev'){ if(session&&session.i>0){ session.i--; go('play'); } return; }
+  if(act==='skip'){ if(session){ session.i++; go('play'); } return; }
   if(act==='hear'){ if(!cur) return; const it=cur.item; if(it.t==='spy') sayPhoneme(it.g,{keyword:it.mode==='g2k'}); else sayWord(it.w, it.t==='first'||it.t==='count'||it.t==='build'); return; }
   if(act==='hear2'){ sayWord(cur.item.w2); return; }
   if(cur&&cur.done) return;

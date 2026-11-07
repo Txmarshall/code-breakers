@@ -2,7 +2,7 @@
 // Strategy: precache the app shell; navigations are network-first (fresh build when online,
 // cached build when offline); everything else is cache-first. Old caches are dropped on activate.
 // A new build installs in the background and waits; the page offers an update button (see build.mjs head).
-const BUILD = '7a2e47aee487';
+const BUILD = '501308cdb038';
 const CACHE = 'code-breakers-' + BUILD;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => {

@@ -29,7 +29,7 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
   await page.goto(URL, { waitUntil: 'load' });
   await page.waitForTimeout(500);
   // wrap the synth after the script ran (function declaration = global binding)
-  await page.evaluate(() => { window.__gen = () => SPEECH_GEN; const o = synthPhoneme; synthPhoneme = (g) => { const r = o(g); window.__syn.push({ g, synth: !!r }); return r; }; });
+  await page.evaluate(() => { window.__gen = () => SPEECH_GEN; const o = synthPhoneme; synthPhoneme = (g) => { const r = o(g); window.__syn.push({ g, synth: !!r, gen: SPEECH_GEN }); return r; }; });
   const spoken = async () => page.evaluate(() => window.__spoken.splice(0));
   const syn = async () => page.evaluate(() => window.__syn.splice(0));
 
@@ -58,7 +58,8 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     if (view !== 'play' || !it) { log('left play view:', view); break; }
     log(`item ${n}: ${it.t} g=${it.g} w=${it.w}`);
     await page.waitForTimeout(700); // let the item's auto-prompt fire (250ms timeout + speech)
-    const auto = await spoken(); const autoSyn = await syn();
+    const gen = await page.evaluate(() => SPEECH_GEN); // only this item's audio counts; the previous item's reveal may still be in the buffer
+    const auto = (await spoken()).filter(x => x.gen === gen); const autoSyn = (await syn()).filter(x => x.gen === gen);
     const curGen = await page.evaluate(() => SPEECH_GEN);
     if (prevW && prevW !== it.w) expect(!auto.some(x => x.gen === curGen && x.t.includes('The word is: ' + prevW)), `previous word "${prevW}" does not leak into this item's audio (after its render)`);
     if (it.t === 'build') {
@@ -114,7 +115,8 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     } else if (it.t === 'spy') {
       const mode = await page.evaluate(() => cur.item.mode);
       const kw = await page.evaluate(() => G[cur.item.g].k);
-      if (mode === 'g2k') expect(auto.some(x => x.t === kw) || autoSyn.some(x => x.synth), `spy picture->sound prompt audible: ${JSON.stringify(auto.map(x => x.t))}`);
+      if (mode === 'g2k') { expect(auto.some(x => x.t === kw) && !autoSyn.some(x => x.synth), `spy picture->sound says the word, not the sound: ${JSON.stringify(auto.map(x => x.t))} syn=${autoSyn.length}`);
+        expect(!(await page.evaluate(() => document.querySelector('#item .emoji-big + p'))), 'spy picture->sound prints no caption'); }
       else expect(!auto.some(x => x.t === kw), `spy letter->picture never speaks the answer keyword "${kw}": ${JSON.stringify(auto.map(x => x.t))}`);
       await page.click(`[data-act="pickg"][data-v="${it.g}"]`);
     } else if (it.t === 'first') {
@@ -159,6 +161,24 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
     const stopped = await page.evaluate(() => animId === null && document.getElementById('cv') === null);
     expect(stopped, 'garden loop cancelled after leaving the break');
   }
+
+  // Back / Next inside a session: no scoring, no double-advance, Back disabled on the first item
+  await page.click('[data-act="play"]'); await page.waitForTimeout(400);
+  const nav = await page.evaluate(async () => {
+    const r = []; const st = () => ({ i: session.i, total: session.total, misses: session.misses.length, prevDisabled: document.querySelector('[data-act="prev"]').disabled, label: document.querySelector('.nav .muted').textContent });
+    r.push(st());
+    document.querySelector('[data-act="skip"]').click(); await new Promise(x => setTimeout(x, 200)); r.push(st());
+    document.querySelector('[data-act="skip"]').click(); await new Promise(x => setTimeout(x, 200)); r.push(st());
+    document.querySelector('[data-act="prev"]').click(); await new Promise(x => setTimeout(x, 200)); r.push(st());
+    // answer correctly, then tap Next during the 0.9 s pause: the pause's own advance must not fire a second time
+    const before = session.i; onCorrect(cur.item.g, 'decode', cur.item.g); document.querySelector('[data-act="skip"]').click(); await new Promise(x => setTimeout(x, 1500)); r.push(Object.assign(st(), { before }));
+    return r;
+  });
+  expect(nav[0].i === 0 && nav[0].prevDisabled && nav[0].label.startsWith('1 /'), `nav starts at item 1 with Back disabled: ${JSON.stringify(nav[0])}`);
+  expect(nav[2].i === 2 && nav[2].total === 0 && nav[2].misses === 0, `Next skips without scoring: ${JSON.stringify(nav[2])}`);
+  expect(nav[3].i === 1 && !nav[3].prevDisabled, `Back returns to the previous item: ${JSON.stringify(nav[3])}`);
+  expect(nav[4].i === nav[4].before + 1, `Next during the post-answer pause advances exactly once: ${JSON.stringify(nav[4])}`);
+  await page.evaluate(() => { endSession(false); go('home'); });
 
   // settings: voice pitch/rate defaults
   const u = await page.evaluate(() => { window.__spoken.length = 0; speak('hi'); return window.__spoken[0]; });
