@@ -76,8 +76,8 @@ const expect = (cond, msg) => { if (cond) log('  PASS', msg); else { log('  FAIL
         // WRONG answer first: fill boxes with the bank in reversed need order where possible
         const wrong = it.need.slice().reverse();
         const tiles = await page.$$('#bank .tile');
-        for (const g of wrong) { for (const t of tiles) { const used = await t.evaluate(e => e.classList.contains('used')); const v = await t.getAttribute('data-v'); if (!used && v === g) { await t.click(); break; } } }
-        await page.waitForTimeout(900);
+        for (const g of wrong) { for (const t of tiles) { const used = await t.evaluate(e => e.classList.contains('used')); const v = await t.getAttribute('data-v'); if (!used && v === g) { await t.click(); await page.waitForTimeout(700); break; } } } // a child taps, listens, taps
+        await page.waitForTimeout(600);
         const tap = await spoken(); const tapSyn = await syn();
         expect(!tap.some(x => /tiger|pig|sun|apple|nut|mouse|dog/.test(x.t)), `tile taps never speak a keyword: ${JSON.stringify(tap.map(x => x.t))}`);
         expect(tap.some(x => x.t === 'What is the next sound?'), 'tile tap asks for the next sound');

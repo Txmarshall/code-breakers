@@ -1,7 +1,7 @@
 // Service worker source. build.mjs replaces the BUILD placeholder with a hash of index.html and writes sw.js.
 // Strategy: precache the app shell; navigations are network-first (fresh build when online,
 // cached build when offline); everything else is cache-first. Old caches are dropped on activate.
-const BUILD = '1c1d922f8af8';
+const BUILD = '7951b88e0eab';
 const CACHE = 'code-breakers-' + BUILD;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => {

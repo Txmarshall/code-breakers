@@ -350,7 +350,13 @@ function heartsFor(p){ const h=[]; LEVELS.filter(l=>l.id<=p.level).forEach(l=>h.
 
 /* ---------- 4. AUDIO ---------- */
 let AC=null;
-function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state!=='running'){ try{ AC.resume(); }catch(e){} } return AC; }
+/* iOS: the ring/silent switch mutes WebAudio but not media playback. Looping a silent media element from the first
+   touch moves the audio session to playback, so the synthesized sounds are heard with the switch on. */
+let UNMUTED=false;
+function unmuteIOS(){ if(UNMUTED) return; UNMUTED=true; try{ const a=document.createElement('audio'); a.setAttribute('playsinline',''); a.loop=true; a.volume=.01;
+  a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; a.play().catch(()=>{ UNMUTED=false; }); window.__unmute=a; }catch(e){ UNMUTED=false; } }
+addEventListener('touchend',()=>{ ac(); unmuteIOS(); },{passive:true}); addEventListener('pointerdown',()=>{ ac(); },{passive:true});
 function tone(freq,dur,type,gain,when){ const c=ac(); if(!c) return; const o=c.createOscillator(), g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq; g.gain.value=0; o.connect(g); g.connect(c.destination); const t=c.currentTime+(when||0); g.gain.linearRampToValueAtTime(gain||.15,t+.02); g.gain.exponentialRampToValueAtTime(.001,t+dur); o.start(t); o.stop(t+dur+.05); }
 // Synthesized continuous consonants. speechSynthesis spells 'sss' as letter names, so hiss/hum them with WebAudio instead.
 let NOISE=null; function noiseBuf(c){ if(!NOISE){ const n=c.sampleRate; NOISE=c.createBuffer(1,n,c.sampleRate); const d=NOISE.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1; } return NOISE; }
@@ -362,16 +368,31 @@ const SYN = {
   f:{noise:{type:'bandpass',f:4200,q:.4,g:.09}}, ff:'f', v:{noise:{type:'bandpass',f:4200,q:.4,g:.05},hum:{f:120,g:.07}}, th:{noise:{type:'bandpass',f:6000,q:.35,g:.06}},
   sh:{noise:{type:'bandpass',f:2800,q:1.4,g:.22}},
   m:{hum:{f:150,g:.12,lp:450}}, n:{hum:{f:150,g:.11,lp:700},form:[[1500,.5,8]]}, ng:{hum:{f:150,g:.11,lp:700},form:[[2100,.5,8]]},
-  a:{vowel:[669,2349,2972]}, i:{vowel:[483,2365,3053]}, e:{vowel:[731,2058,2979]}, o:{vowel:[936,1551,2815]}, u:{vowel:[753,1426,2933]}
+  a:{vowel:[669,2349,2972]}, i:{vowel:[483,2365,3053]}, e:{vowel:[731,2058,2979]}, o:{vowel:[936,1551,2815]}, u:{vowel:[753,1426,2933]},
+  // approximants: formant glide, shorter than a vowel
+  r:{vowel:[480,1250,1650],glide:[560,1400,2100],dur:.4,vg:.5}, l:{vowel:[400,1050,2800],glide:[460,1200,2700],dur:.4,vg:.55},
+  w:{vowel:[300,650,2300],glide:[420,900,2400],dur:.4,vg:.35}, y:{vowel:[280,2400,3100],glide:[400,2100,2900],dur:.4,vg:.55},
+  h:{noise:{type:'lowpass',f:1400,q:.5,g:.32},dur:.3},
+  // stops: one short burst, then nothing (no "uh"). Voiced stops add 70 ms of low hum.
+  p:{burst:{type:'lowpass',f:1000,q:.6,g:2.2,len:.02},dur:.22}, b:{burst:{type:'lowpass',f:1000,q:.6,g:1.8,len:.02},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
+  t:{burst:{type:'bandpass',f:4500,q:.6,g:.7,len:.025},dur:.22}, d:{burst:{type:'bandpass',f:4500,q:.6,g:.55,len:.025},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
+  k:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},dur:.22}, c:'k', ck:'k', g:{burst:{type:'bandpass',f:2200,q:1.2,g:.8,len:.035},hum:{f:120,g:.10,lp:300,len:.07},dur:.22},
+  qu:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},vowel:[300,650,2300],glide:[420,900,2400],vowelAt:.05,dur:.42,vg:.35},
+  x:{burst:{type:'bandpass',f:2200,q:1.2,g:1.0,len:.035},noise:{type:'bandpass',f:7200,q:.9,g:.14,at:.05},dur:.45},
+  ch:{burst:{type:'bandpass',f:4500,q:.6,g:.7,len:.02},noise:{type:'bandpass',f:2800,q:1.4,g:.22,at:.02,len:.14},dur:.25},
+  j:{burst:{type:'bandpass',f:4500,q:.6,g:.5,len:.02},noise:{type:'bandpass',f:2800,q:1.4,g:.14,at:.02,len:.14},hum:{f:120,g:.09,lp:300,len:.16},dur:.25}
 };
-function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=.55, t=c.currentTime;
-  const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+.05); out.gain.setValueAtTime(1,t+dur-.12); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
-  if(d.noise){ const src=c.createBufferSource(); src.buffer=noiseBuf(c); src.loop=true; const flt=c.createBiquadFilter(); flt.type=d.noise.type; flt.frequency.value=d.noise.f; flt.Q.value=d.noise.q; const gn=c.createGain(); gn.gain.value=d.noise.g; src.connect(flt); flt.connect(gn); gn.connect(out); src.start(t); src.stop(t+dur); }
-  if(d.hum){ const o=c.createOscillator(); o.type='triangle'; o.frequency.value=d.hum.f; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=d.hum.lp||400; const gn=c.createGain(); gn.gain.value=d.hum.g; o.connect(lp); lp.connect(gn); gn.connect(out);
-    (d.form||[]).forEach(([f,g,q])=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q; const fg=c.createGain(); fg.gain.value=g*d.hum.g; o.connect(bp); bp.connect(fg); fg.connect(out); }); o.start(t); o.stop(t+dur); }
-  if(d.vowel){ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(150,t); o.frequency.linearRampToValueAtTime(140,t+dur); // slight fall = natural
-    const bw=[90,160,220], gs=[.8,1.6,.8]; d.vowel.forEach((f,i)=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=f/bw[i]; const g2=c.createGain(); g2.gain.value=gs[i]*.9; o.connect(bp); bp.connect(g2); g2.connect(out); });
-    o.start(t); o.stop(t+dur); }
+function synthPhoneme(g){ let d=SYN[g]; if(typeof d==='string') d=SYN[d]; if(!d) return null; const c=ac(); if(!c) return null; const dur=d.dur||.55, t=c.currentTime, att=d.burst?.004:.05;
+  const out=c.createGain(); out.gain.setValueAtTime(0,t); out.gain.linearRampToValueAtTime(1,t+att); out.gain.setValueAtTime(1,t+dur-.08); out.gain.linearRampToValueAtTime(0,t+dur); out.connect(c.destination);
+  const noiseInto=(n,t0,len)=>{ const src=c.createBufferSource(); src.buffer=noiseBuf(c); src.loop=true; const flt=c.createBiquadFilter(); flt.type=n.type; flt.frequency.value=n.f; flt.Q.value=n.q; const gn=c.createGain(); gn.gain.value=n.g; src.connect(flt); flt.connect(gn); gn.connect(out); src.start(t0); src.stop(t0+len); return gn; };
+  if(d.burst){ const gn=noiseInto(d.burst,t,d.burst.len+.01); gn.gain.setValueAtTime(d.burst.g,t); gn.gain.exponentialRampToValueAtTime(.001,t+d.burst.len); }
+  if(d.noise){ const at=d.noise.at||0, len=d.noise.len||(dur-at); const gn=noiseInto(d.noise,t+at,len); if(d.noise.len){ gn.gain.setValueAtTime(d.noise.g,t+at+len*.6); gn.gain.linearRampToValueAtTime(0,t+at+len); } }
+  if(d.hum){ const len=d.hum.len||dur; const o=c.createOscillator(); o.type='triangle'; o.frequency.value=d.hum.f; const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=d.hum.lp||400; const gn=c.createGain(); gn.gain.value=d.hum.g; if(d.hum.len){ gn.gain.setValueAtTime(d.hum.g,t+len*.6); gn.gain.linearRampToValueAtTime(0,t+len); } o.connect(lp); lp.connect(gn); gn.connect(out);
+    (d.form||[]).forEach(([f,g,q])=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=q; const fg=c.createGain(); fg.gain.value=g*d.hum.g; o.connect(bp); bp.connect(fg); fg.connect(out); }); o.start(t); o.stop(t+len); }
+  if(d.vowel){ const t0=t+(d.vowelAt||0), vd=dur-(d.vowelAt||0); const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(150,t0); o.frequency.linearRampToValueAtTime(140,t0+vd); // slight fall = natural
+    const bw=[90,160,220], gs=[.8,1.6,.8], vg=(d.vg||1)*.9; d.vowel.forEach((f,i)=>{ const bp=c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(f,t0); if(d.glide) bp.frequency.linearRampToValueAtTime(d.glide[i],t0+vd*.7); bp.Q.value=f/bw[i]; const g2=c.createGain(); g2.gain.value=gs[i]*vg; o.connect(bp); bp.connect(g2); g2.connect(out); });
+    if(d.vowelAt){ out.gain.setValueAtTime(0,t+d.burst.len+.01); out.gain.linearRampToValueAtTime(1,t0+.04); }
+    o.start(t0); o.stop(t0+vd); }
   return new Promise(r=>setTimeout(r,dur*1000)); }
 const SFX = {
   good(){ tone(523,.18,'sine',.12); tone(784,.28,'sine',.12,.12); },
@@ -394,9 +415,9 @@ function speak(text, opts){
 function playClip(dataUrl){ return new Promise(res=>{ try{ const a=new Audio(dataUrl); a.onended=res; a.onerror=res; a.play().catch(()=>res()); }catch(e){ res(); } }); }
 async function sayWord(w,carrier){ if(DB.voice['w:'+w]) return playClip(DB.voice['w:'+w]); return speak(carrier?'The word is: '+w+'. '+w+'.':w,{rate:.75}); }
 async function sayPhoneme(g, opts){
-  // Parent recording first (correct, clipped sounds). Otherwise TTS approximation for continuous sounds.
-  // A stop sound with no recording is SILENT unless opts.keyword (the I-Spy prompt) - speaking 'tiger' on a tile tap
-  // mid-word made a learner think the word was 'tiger'.
+  // Parent recording first (correct, clipped sounds). Otherwise the WebAudio synth (every single-sound grapheme has an
+  // entry: fricatives, nasals, short vowels, approximants, and stops as a bare burst with no "uh"). TTS only for the
+  // long vowels/digraphs it reads correctly. Never a keyword on a tile tap: 'tiger' mid-word made a learner think the word was 'tiger'.
   if(DB.voice['g:'+g]) return playClip(DB.voice['g:'+g]);
   const sy=synthPhoneme(g); if(sy) return sy;
   const d=G[g]||{};
@@ -800,7 +821,7 @@ S.grown=function(){
   return bar('Grown-ups',`<button class="btn ghost small" data-act="why">Why it works</button>`)+`<main class="stack">
     <div class="card stack"><h2>Players</h2>${profiles||'<p class="muted">No players yet.</p>'}</div>
     <div class="card stack"><h2>Reading voice</h2>
-      <div class="row"><span class="chip">${recN} of ${SND.length} sounds recorded</span>${recN?'':'<span class="muted" style="font-size:.9rem">Until you record, isolated stop sounds (t, p, b…) are shown silently in the sound boxes and spoken as their keyword word on the Sound Spy button.</span>'}</div>
+      <div class="row"><span class="chip">${recN} of ${SND.length} sounds recorded</span>${recN?'':'<span class="muted" style="font-size:.9rem">Until you record, every sound is a synthesized approximation. Stop sounds (t, p, b…) are a bare click with no \'uh\'; your recording will always sound better.</span>'}</div>
       <p class="cite">Whole words use the device's text-to-speech. Isolated sounds are the weak spot of any synthetic voice (it adds "uh" after stop sounds — "buh" instead of /b/). Recording your own clipped sounds fixes that and lets her hear a familiar voice.</p>
       <div class="row"><label class="field grow">Voice <select id="voicesel">${VOICES.map(v=>`<option ${v.name===s.voice?'selected':''}>${esc(v.name)}</option>`).join('')||'<option>Default</option>'}</select></label><button class="btn small secondary" data-act="setvoice">Use</button><button class="btn small ghost" data-act="testvoice">Test</button></div>
       <label class="field">Speed <input type="range" id="rate" min="0.6" max="1.1" step="0.05" value="${s.rate}"></label>
