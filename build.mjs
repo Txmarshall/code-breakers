@@ -26,9 +26,25 @@ const head = `<!doctype html>
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <style>img{max-width:100%}[hidden]{display:none!important}</style>
+<style>.upd{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:50;background:#2F7D6B;color:#fff;border:0;border-radius:999px;padding:12px 20px;font:700 1rem Verdana,"DejaVu Sans",Arial,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.3);cursor:pointer}.upd:disabled{opacity:.7}</style>
 <script>
 // PWA: register the service worker on http(s) only (file:// and the artifact viewer have no SW).
-if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){ addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+// A new build waits (sw.js does not skipWaiting on its own); an "update ready" pill appears on every screen and the
+// reload happens only when it is tapped, so nobody loses a session mid-item. Updates are checked hourly and whenever
+// the app comes back to the foreground, because an installed app can stay open for days.
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){ addEventListener('load', async ()=>{
+  let reg; try{ reg=await navigator.serviceWorker.register('sw.js'); }catch(e){ return; }
+  let clicked=false;
+  const show=()=>{ if(!reg.waiting||document.getElementById('upd')) return; const b=document.createElement('button'); b.id='upd'; b.className='upd'; b.textContent='New version ready \u00b7 tap to update';
+    b.onclick=()=>{ clicked=true; b.disabled=true; b.textContent='Updating\u2026'; try{ if(typeof endSession==='function') endSession(false); }catch(e){} if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); else location.reload(); };
+    document.body.appendChild(b); };
+  if(reg.waiting) show();
+  reg.addEventListener('updatefound',()=>{ const w=reg.installing; if(!w) return; w.addEventListener('statechange',()=>{ if(w.state==='installed'&&navigator.serviceWorker.controller) show(); }); });
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(clicked){ clicked=false; location.reload(); } });
+  const check=()=>{ reg.update().catch(()=>{}); };
+  setInterval(check,60*60*1000); document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') check(); });
+  window.__swCheck=check;
+}); }
 </script>
 </head>
 <body>
